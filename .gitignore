@@ -9,7 +9,7 @@ package-lock.json
 .vscode/
 
 # Logs
-logs
+logs/
 *.log
 
 # Data
