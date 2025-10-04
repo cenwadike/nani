@@ -1,0 +1,19 @@
+dist/
+node_modules/
+
+package-lock.json
+.env
+.env.local
+.env.example
+.DS_Store
+.vscode/
+
+# Logs
+logs
+*.log
+
+# Data
+data/
+*.sqlite
+*.sqlite3
+*.db
