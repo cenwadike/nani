@@ -91,6 +91,13 @@ export default {
   info: (msg: string) => writeLog('info', msg),
 
   /**
+   * @function warn
+   * @description Logs a warning message.
+   * @param msg - Message to log
+   */
+  warn: (msg: string) => writeLog('warn', msg),
+
+  /**
    * @function error
    * @description Logs an error message.
    * @param msg - Message to log

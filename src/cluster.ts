@@ -33,6 +33,15 @@ import cluster from 'cluster';
 import os from 'os';
 import logger from './utils/logger';
 
+import { loadPlugins, plugins } from './utils/pluginRegistry';
+
+loadPlugins();
+const serializedPlugins = JSON.stringify(plugins);
+
+for (const id in cluster.workers) {
+  cluster.workers[id]?.send({ type: 'plugin-init', payload: serializedPlugins });
+}
+
 // Determine the number of logical CPU cores available for clustering.
 const numCPUs = os.cpus().length;
 

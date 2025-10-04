@@ -45,6 +45,12 @@ const config = {
   // WebSocket endpoint for connecting to the Polkadot API (Westend testnet)
   papiWs: process.env.PAPI_WS || 'wss://westend-rpc.polkadot.io',
 
+  // Backup endpoints for fault tolerance
+  backupPapiWs: (process.env.BACKUP_PAPI_WS || '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean),
+
   // AES-256 encryption key for securing tenant logs
   encryptionKey: process.env.ENCRYPTION_KEY || 'default-32-char-key-change-me!',
 
@@ -67,5 +73,5 @@ const config = {
   },
 };
 
-logger.info(`Configuration initialized: port=${config.port}, papiWs=${config.papiWs}`);
+logger.info(`Configuration initialized: port=${config.port}, papiWs=${config.papiWs}, backups=${config.backupPapiWs.length}`);
 export default config;

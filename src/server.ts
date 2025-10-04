@@ -23,73 +23,37 @@
 
 /**
  * @file server.ts
- * @summary Initializes the Express application and event monitoring engine.
- * @description This file sets up the loads plugins, configures middleware, HTTP server,
- *              and starts blockchain event monitoring using Polkadot API (PAPI).
+ * @summary Starts the Express server and event monitoring engine.
+ * @description This file sets up the HTTP server, and starts 
+ *              blockchain event monitoring using Polkadot API (PAPI).
  */
 
-import { loadPlugins } from './utils/pluginRegistry';
-loadPlugins(); // Dynamically load all activity, notification, and stats plugins
-
-import express, { Application, Request, Response } from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
+import app from './app';
 import config from './config';
-import { limiter, verifyToken } from './middlewares/auth';
-import errorHandler from './middlewares/errorHandler';
 import { getApi } from './utils/papi';
 import storage from './utils/storage';
-import authRouter from './routes/auth';
-import setupRouter from './routes/setup';
-import statsRouter from './routes/stats';
-import exportRouter from './routes/export';
 import workerpool from 'workerpool';
 import os from 'os';
 import logger from './utils/logger';
+import { plugins } from './utils/pluginRegistry';
 
-// Create a worker pool for plugin execution, scaled to available CPU cores
+process.on('message', (msg: any) => {
+  if (msg?.type === 'plugin-init') {
+    Object.assign(plugins, JSON.parse(msg.payload));
+    logger.info(`Worker ${process.pid} initialized plugins from master`);
+  }
+});
+
 const numCores = os.cpus().length;
 const pool = workerpool.pool(__dirname + '/utils/pluginWorker.ts', {
   maxWorkers: numCores
 });
 
-const app: Application = express();
-
-// Apply security and rate-limiting middleware
-app.use(helmet());
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
-app.use(limiter);
-
-logger.info(`Worker ${process.pid} initializing Express server...`);
-
-// Log incoming requests with process ID for debugging
-app.use((req: Request, res: Response, next: Function) => {
-  logger.info(`Worker ${process.pid} received ${req.method} ${req.url} from ${req.ip}`);
-  next();
-});
-
-// Mount API routes
-app.use('/auth', authRouter);
-app.use('/setup', verifyToken, setupRouter);
-app.use('/stats', verifyToken, statsRouter);
-app.use('/export', verifyToken, exportRouter);
-
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Global error handler
-app.use(errorHandler);
-
-// Start Express server
 const port = config.port;
 app.listen(port, () => {
   logger.info(`Worker ${process.pid} running on port ${port}`);
 });
 
-// Listen for IPC messages from the cluster master
 process.on('message', (msg: any) => {
   if (msg?.type === 'start-monitoring') {
     logger.event(`Worker ${process.pid} received start-monitoring signal`);
@@ -99,10 +63,6 @@ process.on('message', (msg: any) => {
 
 let isMonitoring = false;
 
-/**
- * @function startMonitoring
- * @description Subscribes to Polkadot system events and dispatches plugin tasks per tenant.
- */
 async function startMonitoring() {
   if (isMonitoring) return;
   isMonitoring = true;
@@ -112,12 +72,10 @@ async function startMonitoring() {
     const api = await getApi();
     if (!api) throw new Error('Failed to connect to Polkadot API');
 
-    // Subscribe to system events
     api.query.system.events(async (events: any[]) => {
       logger.event(`Worker ${process.pid} received ${events.length} system events`);
       const tenantIds = await storage.getAllTenants();
 
-      // Load tenant configurations
       const tenantConfigs = await Promise.all(
         tenantIds.map(async (tenantId) => {
           const config = await storage.loadConfig(tenantId);
@@ -127,7 +85,6 @@ async function startMonitoring() {
 
       const tasks: Promise<any>[] = [];
 
-      // Dispatch plugin tasks for each tenant and event
       for (const record of events) {
         for (const tenant of tenantConfigs.filter(Boolean)) {
           tasks.push(
@@ -142,9 +99,9 @@ async function startMonitoring() {
         }
       }
 
-      // Wait for all plugin tasks to settle
       await Promise.allSettled(tasks);
     });
+
     logger.event(`Worker ${process.pid} completed plugin dispatch for current event batch`);
   } catch (error) {
     logger.error(`Failed to start monitoring: ${error}`);

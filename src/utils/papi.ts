@@ -44,11 +44,13 @@ let reconnectAttempts = 0;
 // Maximum delay between reconnection attempts (in milliseconds)
 const MAX_RECONNECT_DELAY = 30000;
 
+// List of fallback endpoints (primary first)
+const endpoints = [config.papiWs, ...(config.backupPapiWs || [])];
+
 /**
  * @function connect
- * @description Establishes a WebSocket connection to the Polkadot API.
- *              Ensures only one connection attempt is active at a time.
- *              Automatically sets up a listener for disconnection events.
+ * @description Attempts to connect to the Polkadot API using available endpoints.
+ *              Tries each endpoint in order until successful.
  * @returns {ApiPromise} Connected API instance
  */
 async function connect(): Promise<ApiPromise> {
@@ -67,27 +69,29 @@ async function connect(): Promise<ApiPromise> {
 
   isConnecting = true;
 
-  try {
-    logger.event('Connecting to Polkadot API...');
-    const provider = new WsProvider(config.papiWs);
-    api = await ApiPromise.create({ provider });
+  for (const endpoint of endpoints) {
+    try {
+      logger.event(`Attempting connection to Polkadot API at ${endpoint}`);
+      const provider = new WsProvider(endpoint);
+      api = await ApiPromise.create({ provider });
 
-    logger.info('Connected to Polkadot API');
-    reconnectAttempts = 0;
-    isConnecting = false;
+      logger.info(`Connected to Polkadot API at ${endpoint}`);
+      reconnectAttempts = 0;
+      isConnecting = false;
 
-    // Listen for disconnection and trigger reconnection
-    api.on('disconnected', () => {
-      logger.error('Polkadot API disconnected, attempting reconnect...');
-      reconnect();
-    });
+      api.on('disconnected', () => {
+        logger.error(`Disconnected from ${endpoint}, attempting reconnect...`);
+        reconnect();
+      });
 
-    return api;
-  } catch (error: any) {
-    isConnecting = false;
-    logger.error(`Failed to connect to Polkadot API: ${error.message}`);
-    throw error;
+      return api;
+    } catch (error: any) {
+      logger.error(`Connection failed for ${endpoint}: ${error.message}`);
+    }
   }
+
+  isConnecting = false;
+  throw new Error('All Polkadot API endpoints failed');
 }
 
 /**

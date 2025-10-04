@@ -34,6 +34,7 @@ import storage from '../utils/storage';
 import { getPlugin, loadPlugins } from '../utils/pluginRegistry';
 import { isValidPolkadotAddress } from '../utils/validate';
 import { NotificationPlugin } from '../types/pluginTypes';
+import logger from '../utils/logger';
 
 loadPlugins(); // Ensure plugins are loaded before handling requests
 
@@ -47,24 +48,24 @@ const router = Router();
 router.post('/', async (req: Request, res: Response) => {
   try {
     // Log full request body for debugging
-    console.log('Full request body:', JSON.stringify(req.body, null, 2));
+    logger.info(`Full request body: ${JSON.stringify(req.body, null, 2)}`);
 
     const { address, plugins } = req.body;
     const { tenantId } = req as any; // Injected by verifyToken middleware
 
-    console.log('Parsed address:', address);
-    console.log('Parsed plugins:', plugins);
+    logger.info(`Parsed address: ${address}`);
+    logger.info(`Parsed plugins: ${JSON.stringify(plugins, null, 2)}`);
 
     // Validate request body structure
     if (!req.body || Object.keys(req.body).length === 0) {
-      console.log('Request body is empty or undefined');
+      logger.warn('Request body is empty or undefined');
       return res.status(400).json({ error: 'Request body is empty or malformed' });
     }
 
     // Validate Polkadot address format
     const { isValid, polkadotAddress } = isValidPolkadotAddress(address);
     if (!address || !isValid || !polkadotAddress) {
-      console.log('Address validation failed for:', address);
+      logger.error(`Address validation failed for: ${address}`);
       return res.status(400).json({ error: 'Invalid Polkadot address' });
     }
 
@@ -113,7 +114,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Setup error:', error.message);
+    logger.error(`Setup error: ${error.message}`);
     res.status(400).json({ error: error.message });
   }
 });

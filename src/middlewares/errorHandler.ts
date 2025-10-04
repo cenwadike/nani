@@ -29,6 +29,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import logger from '../utils/logger';
 
 /**
  * @function errorHandler
@@ -40,8 +41,8 @@ import { Request, Response, NextFunction } from 'express';
  * @param next - Callback to pass control (unused here)
  */
 function errorHandler(err: any, req: Request, res: Response, next: NextFunction) {
-  console.error('Error:', err.message);
-  console.error(err.stack);
+  logger.error(`Error: ${err.message}`);
+  logger.error(err.stack);
 
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',

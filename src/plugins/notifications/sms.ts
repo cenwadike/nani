@@ -31,6 +31,7 @@
 import twilio from 'twilio';
 import config from '../../config';
 import { NotificationPlugin } from '../../types/pluginTypes';
+import logger from '../../utils/logger';
 
 // Twilio client instance (lazy-initialized)
 let client: any = null;
@@ -75,9 +76,9 @@ const sms: NotificationPlugin = {
         from: config.twilio.from,
         to: pluginConfig.phone,
       });
-      console.log(`SMS sent to ${pluginConfig.phone}`);
+      logger.info(`SMS sent to ${pluginConfig.phone}`);
     } catch (error: any) {
-      console.error(`SMS error for ${pluginConfig.phone}:`, error.message);
+      logger.error(`SMS error for ${pluginConfig.phone}: ${error.message}`);
       throw error;
     }
   },

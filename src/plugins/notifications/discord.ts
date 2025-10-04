@@ -30,6 +30,7 @@
 
 import axios from 'axios';
 import { NotificationPlugin } from '../../types/pluginTypes';
+import logger from '../../utils/logger';
 
 const discord: NotificationPlugin = {
   name: 'discord',
@@ -59,9 +60,9 @@ const discord: NotificationPlugin = {
         content: message,
         username: 'Nani Bot',
       });
-      console.log(`Discord notification sent to ${pluginConfig.webhook}`);
+      logger.info(`Discord notification sent to ${pluginConfig.webhook}`);
     } catch (error: any) {
-      console.error(`Discord error for ${pluginConfig.webhook}:`, error.message);
+      logger.error(`Discord error for ${pluginConfig.webhook}: ${error.message}`);
       throw error;
     }
   },
