@@ -5,7 +5,7 @@
   "main": "dist/cluster.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cluster.js",
+    "start": "node dist/src/cluster.js",
     "dev": "ts-node-dev src/cluster.ts",
     "test": "jest"
   },
@@ -13,6 +13,7 @@
     "@polkadot/api": "^10.11.1",
     "@polkadot/keyring": "^12.3.1",
     "@polkadot/util": "^12.3.1",
+    "@types/nodemailer": "^7.0.3",
     "axios": "^1.6.2",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
@@ -21,6 +22,7 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.10",
     "twilio": "^4.19.0",
     "winston": "^3.11.0",
     "workerpool": "^9.3.4"

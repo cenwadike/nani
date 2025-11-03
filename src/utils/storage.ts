@@ -35,153 +35,152 @@ import config from '../config';
 import logger from './logger';
 import { promises as fsPromises } from 'fs';
 
-// Root directory for storing tenant data
-const DATA_DIR = path.join(__dirname, '../data');
+// ──────────────────────────────────────────────────────────────────────
+//  DATA ROOT – same level as `logs/`, `src/`, etc.
+//  → /project/src/data/<tenantId>/...
+// ──────────────────────────────────────────────────────────────────────
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const DATA_ROOT = path.join(PROJECT_ROOT, 'src', 'data');
 
-// Ensure the data directory exists at startup
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  logger.info(`Created data directory: ${DATA_DIR}`);
+// Ensure root exists
+if (!fs.existsSync(DATA_ROOT)) {
+  fs.mkdirSync(DATA_ROOT, { recursive: true });
+  logger.info(`Created data root: ${DATA_ROOT}`);
 }
 
-/**
- * @function getTenantDir
- * @description Returns the directory path for a given tenant, creating it if necessary.
- * @param tenantId - Unique identifier for the tenant
- * @returns Absolute path to the tenant's data directory
- */
-function getTenantDir(tenantId: string): string {
-  const dir = path.join(DATA_DIR, tenantId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    logger.info(`Created tenant directory: ${dir}`);
-  }
-  return dir;
-}
+// ──────────────────────────────────────────────────────────────────────
+//  ENCRYPTION HELPERS
+// ──────────────────────────────────────────────────────────────────────
+const encrypt = (data: any): string =>
+  CryptoJS.AES.encrypt(JSON.stringify(data), config.encryptionKey).toString();
 
-/**
- * @function encrypt
- * @description Encrypts data using AES and the configured encryption key.
- * @param data - Arbitrary JSON-serializable data
- * @returns Encrypted string
- */
-function encrypt(data: any): string {
-  logger.event('Encrypting data for storage');
-  return CryptoJS.AES.encrypt(JSON.stringify(data), config.encryptionKey).toString();
-}
-
-/**
- * @function decrypt
- * @description Decrypts AES-encrypted string back into JSON.
- * @param encrypted - Encrypted string
- * @returns Parsed JSON object
- */
-function decrypt(encrypted: string): any {
-  logger.event('Decrypting data from storage');
+const decrypt = (encrypted: string): any => {
   const bytes = CryptoJS.AES.decrypt(encrypted, config.encryptionKey);
   return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-}
+};
 
-/**
- * @function saveConfig
- * @description Saves encrypted tenant configuration to disk.
- * @param tenantId - Tenant identifier
- * @param configData - Configuration object to persist
- */
-async function saveConfig(tenantId: string, configData: any): Promise<void> {
-  const dir = getTenantDir(tenantId);
-  const filePath = path.join(dir, 'config.json');
-  const encrypted = encrypt(configData);
-  await fsPromises.writeFile(filePath, encrypted, 'utf8');
-  logger.info(`Saved config for tenant ${tenantId}`);
-}
-
-/**
- * @function loadConfig
- * @description Loads and decrypts tenant configuration from disk.
- * @param tenantId - Tenant identifier
- * @returns Configuration object or null if not found
- */
-async function loadConfig(tenantId: string): Promise<any | null> {
-  const filePath = path.join(getTenantDir(tenantId), 'config.json');
-  try {
-    const encrypted = await fsPromises.readFile(filePath, 'utf8');
-    logger.info(`Loaded config for tenant ${tenantId}`);
-    return decrypt(encrypted);
-  } catch {
-    logger.error(`Config not found for tenant ${tenantId}`);
-    return null;
+// ──────────────────────────────────────────────────────────────────────
+//  TENANT DIRECTORY
+// ──────────────────────────────────────────────────────────────────────
+const getTenantDir = (tenantId: string): string => {
+  const dir = path.join(DATA_ROOT, tenantId);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    logger.info(`Created tenant dir: ${dir}`);
   }
-}
+  return dir;
+};
 
-/**
- * @function saveLogs
- * @description Saves encrypted event logs for a tenant.
- * @param tenantId - Tenant identifier
- * @param logs - Array of log entries
- */
-async function saveLogs(tenantId: string, logs: any[]): Promise<void> {
-  const dir = getTenantDir(tenantId);
-  const filePath = path.join(dir, 'logs.json');
-  const encrypted = encrypt(logs);
-  await fsPromises.writeFile(filePath, encrypted, 'utf8');
-  logger.info(`Saved ${logs.length} logs for tenant ${tenantId}`);
-}
+// ──────────────────────────────────────────────────────────────────────
+//  CONFIG (encrypted, single file)
+// ──────────────────────────────────────────────────────────────────────
+export const saveConfig = async (tenantId: string, cfg: any): Promise<void> => {
+  const file = path.join(getTenantConfigDir(tenantId), 'config.json');
+  await fsPromises.writeFile(file, encrypt(cfg), 'utf8');
+  logger.info(`Config saved → ${file}`);
+};
 
-/**
- * @function loadLogs
- * @description Loads and decrypts event logs for a tenant.
- * @param tenantId - Tenant identifier
- * @returns Array of log entries
- */
-async function loadLogs(tenantId: string): Promise<any[]> {
-  const filePath = path.join(getTenantDir(tenantId), 'logs.json');
-  if (!fs.existsSync(filePath)) {
-    logger.info(`No logs found for tenant ${tenantId}`);
-    return [];
+export const loadConfig = async (tenantId: string): Promise<any | null> => {
+  const file = path.join(getTenantConfigDir(tenantId), 'config.json');
+  if (!fs.existsSync(file)) return null;
+  const data = await fsPromises.readFile(file, 'utf8');
+  return decrypt(data);
+};
+
+const getTenantConfigDir = (tenantId: string): string => getTenantDir(tenantId);
+
+// ──────────────────────────────────────────────────────────────────────
+//  LOGS – Monthly folders, Daily JSONL files (encrypted per file)
+// ──────────────────────────────────────────────────────────────────────
+const getLogFilePath = (tenantId: string, date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const monthDir = path.join(getTenantDir(tenantId), 'logs', `${year}-${month}`);
+  if (!fs.existsSync(monthDir)) {
+    fs.mkdirSync(monthDir, { recursive: true });
   }
-  const encrypted = await fsPromises.readFile(filePath, 'utf8');
-  logger.info(`Loaded logs for tenant ${tenantId}`);
-  return decrypt(encrypted);
-}
+
+  return path.join(monthDir, `${day}.jsonl`);
+};
 
 /**
- * @function appendLog
- * @description Appends a single log entry to the tenant's log file.
- * @param tenantId - Tenant identifier
- * @param logEntry - Log entry object
+ * Append a **single** log entry (JSON line)
  */
-async function appendLog(tenantId: string, logEntry: any): Promise<void> {
-  const logs = await loadLogs(tenantId);
-  logs.push(logEntry);
-  await saveLogs(tenantId, logs);
-  logger.event(`Appended log entry for tenant ${tenantId}`);
-}
+export const appendLog = async (tenantId: string, entry: any): Promise<void> => {
+  const file = getLogFilePath(tenantId);
+  const line = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    ...entry,
+  }) + '\n';
+
+  // Encrypt per line (optional: encrypt whole file)
+  const encryptedLine = encrypt(line);
+
+  await fsPromises.appendFile(file, encryptedLine + '\n');
+  logger.event(`Log appended → ${file}`);
+};
 
 /**
- * @function getAllTenants
- * @description Lists all tenant directories in the data folder.
- * @returns Array of tenant IDs
+ * Load **all** logs for a tenant (decrypts line-by-line)
  */
-async function getAllTenants(): Promise<string[]> {
-  if (!fs.existsSync(DATA_DIR)) return [];
-  const files = await fsPromises.readdir(DATA_DIR);
-  const tenantIds = await Promise.all(
-    files.map(async (file) => {
-      const stat = await fsPromises.stat(path.join(DATA_DIR, file));
-      return stat.isDirectory() ? file : null;
-    })
-  );
-  const validTenants = tenantIds.filter(Boolean) as string[];
-  logger.info(`Discovered ${validTenants.length} tenants`);
-  return validTenants;
-}
+export const loadLogs = async (tenantId: string): Promise<any[]> => {
+  const tenantDir = getTenantDir(tenantId);
+  const logsDir = path.join(tenantDir, 'logs');
+  if (!fs.existsSync(logsDir)) return [];
 
+  const months = await fsPromises.readdir(logsDir);
+  const all: any[] = [];
+
+  for (const month of months) {
+    const monthPath = path.join(logsDir, month);
+    const days = await fsPromises.readdir(monthPath);
+
+    for (const day of days) {
+      const file = path.join(monthPath, day);
+      const content = await fsPromises.readFile(file, 'utf8');
+      const lines = content.trim().split('\n').filter(Boolean);
+
+      for (const enc of lines) {
+        try {
+          const decrypted = decrypt(enc);
+          all.push(JSON.parse(decrypted));
+        } catch (e) {
+          logger.error(`Failed to decrypt log line in ${file}`);
+        }
+      }
+    }
+  }
+
+  return all.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+};
+
+/**
+ * Get all tenant IDs
+ */
+export const getAllTenants = async (): Promise<string[]> => {
+  if (!fs.existsSync(DATA_ROOT)) return [];
+  const entries = await fsPromises.readdir(DATA_ROOT);
+  const tenants = (
+    await Promise.all(
+      entries.map(async (e) => {
+        const stat = await fsPromises.stat(path.join(DATA_ROOT, e));
+        return stat.isDirectory() ? e : null;
+      })
+    )
+  ).filter(Boolean) as string[];
+  logger.info(`Found ${tenants.length} tenants`);
+  return tenants;
+};
+
+// ──────────────────────────────────────────────────────────────────────
+//  EXPORT
+// ──────────────────────────────────────────────────────────────────────
 export default {
   saveConfig,
   loadConfig,
-  saveLogs,
-  loadLogs,
   appendLog,
+  loadLogs,
   getAllTenants,
 };

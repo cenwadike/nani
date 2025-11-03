@@ -48,13 +48,14 @@ const router = Router();
 router.post('/', async (req: Request, res: Response) => {
   try {
     // Log full request body for debugging
-    logger.info(`Full request body: ${JSON.stringify(req.body, null, 2)}`);
+    const reqBody = JSON.stringify(req.body, null, 2);
+    logger.info(`Full request body: ${reqBody}`);
 
     const { address, plugins } = req.body;
     const { tenantId } = req as any; // Injected by verifyToken middleware
 
     logger.info(`Parsed address: ${address}`);
-    logger.info(`Parsed plugins: ${JSON.stringify(plugins, null, 2)}`);
+    logger.info(`Parsed plugins: ${reqBody}`);
 
     // Validate request body structure
     if (!req.body || Object.keys(req.body).length === 0) {

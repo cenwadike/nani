@@ -19,59 +19,112 @@
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// SOFTWARE.  
 
 /**
  * @file config.ts
- * @summary Centralized configuration loader for environment variables.
- * @description Loads runtime configuration from `.env` using `dotenv` and exports
- *              a typed object for use across the Nani application.
+ * @summary validated configuration loader.
  */
 
 import dotenv from 'dotenv';
 import logger from './utils/logger';
 
-// Load environment variables from .env file into process.env
+// Load .env
 dotenv.config();
 logger.info('Environment variables loaded from .env');
 
+/**
+ * Helper: safe integer parse
+ */
+const int = (val: string | undefined, def: number): number =>
+  val && !isNaN(parseInt(val, 10)) ? parseInt(val, 10) : def;
+
+/**
+ * Helper: boolean parse
+ */
+const bool = (val: string | undefined, def: boolean): boolean =>
+  val === 'true' ? true : val === 'false' ? false : def;
+
+/**
+ * Helper: non-empty string
+ */
+const str = (val: string | undefined, def: string): string =>
+  val && val.trim() ? val.trim() : def;
+
+// ──────────────────────────────────────────────────────────────────────
+// Configuration Object
+// ──────────────────────────────────────────────────────────────────────
+
 const config = {
-  // Port on which the Express server will run
-  port: parseInt(process.env.PORT || '3000', 10),
+  // ── Server
+  port: int(process.env.PORT, 3000),
 
-  // Secret key used for signing JWT tokens
-  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  // ── Auth
+  jwtSecret: str(process.env.JWT_SECRET, 'dev-secret-change-me'),
 
-  // WebSocket endpoint for connecting to the Polkadot API (Westend testnet)
-  papiWs: process.env.PAPI_WS || 'wss://westend-rpc.polkadot.io',
-
-  // Backup endpoints for fault tolerance
+  // ── Polkadot API
+  papiWs: str(process.env.PAPI_WS, 'wss://westend-rpc.polkadot.io'),
   backupPapiWs: (process.env.BACKUP_PAPI_WS || '')
     .split(',')
-    .map((url) => url.trim())
+    .map(s => s.trim())
     .filter(Boolean),
 
-  // AES-256 encryption key for securing tenant logs
-  encryptionKey: process.env.ENCRYPTION_KEY || 'default-32-char-key-change-me!',
+  // ── Encryption
+  encryptionKey: str(
+    process.env.ENCRYPTION_KEY,
+    'default-32-char-key-change-me!'
+  ),
 
-  // Twilio credentials for SMS notification plugin
+  // ── Twilio
   twilio: {
-    sid: process.env.TWILIO_SID,
-    token: process.env.TWILIO_TOKEN,
-    from: process.env.TWILIO_FROM,
+    sid: str(process.env.TWILIO_SID, ''),
+    token: str(process.env.TWILIO_TOKEN, ''),
+    from: str(process.env.TWILIO_FROM, ''),
   },
 
-  // Discord webhook URL for Discord notification plugin
+  // ── Discord
   discord: {
-    webhook: process.env.DISCORD_WEBHOOK,
+    webhook: str(process.env.DISCORD_WEBHOOK, ''),
   },
 
-  // Rate limiting configuration for API endpoints
+  // ── Rate Limiting
   rateLimit: {
-    windowMs: 60 * 1000, // Time window in milliseconds (1 minute)
-    max: 10,             // Maximum number of requests per window per IP
+    windowMs: 60 * 1000,
+    max: 10,
+  },
+
+  // ── SMTP (Fixed!)
+  smtp: {
+    host: str(process.env.SMTP_HOST, 'localhost'),
+    port: int(process.env.SMTP_PORT, 587),
+    secure: bool(process.env.SMTP_SECURE, false),
+    user: str(process.env.SMTP_USER, ''),
+    pass: str(process.env.SMTP_PASS, ''),
+    from: str(process.env.SMTP_FROM, '"Nani" <noreply@nani.com>'),
   },
 };
 
-logger.info(`Configuration initialized: port=${config.port}, papiWs=${config.papiWs}, backups=${config.backupPapiWs.length}`);
+// ──────────────────────────────────────────────────────────────────────
+// Validation & Logging
+// ──────────────────────────────────────────────────────────────────────
+
+const required = (key: string, value: any) => {
+  if (!value) {
+    logger.error(`Missing required config: ${key}`);
+    process.exit(1);
+  }
+};
+
+required('JWT_SECRET', config.jwtSecret);
+required('ENCRYPTION_KEY', config.encryptionKey);
+required('TWILIO_SID', config.twilio.sid);
+required('TWILIO_TOKEN', config.twilio.token);
+required('TWILIO_FROM', config.twilio.from);
+required('SMTP_USER', config.smtp.user);
+required('SMTP_PASS', config.smtp.pass);
+
+logger.info(
+  `Config loaded: port=${config.port}, papiWs=${config.papiWs}, backups=${config.backupPapiWs.length}`
+);
+
 export default config;

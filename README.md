@@ -231,22 +231,31 @@ npm install
 PORT=3000
 NODE_ENV=development
 
-# Polkadot API Connection
+# Auth
+JWT_SECRET=your-super-secret-jwt-key-here
+
+# Polkadot
 PAPI_WS=wss://westend-rpc.polkadot.io
+BACKUP_PAPI_WS=wss://rpc.polkadot.io,wss://kusama-rpc.polkadot.io
 
-# Security Keys (generate strong random values)
-# Generate JWT secret: openssl rand -base64 32
-JWT_SECRET=your-super-secret-jwt-key-min-32-characters
-# Generate encryption key: openssl rand -base64 32
-ENCRYPTION_KEY=your-256-bit-encryption-key-for-storage
+# Encryption
+ENCRYPTION_KEY=32-character-aes-key-1234567890
 
-# Twilio SMS Notifications (optional)
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=your-twilio-auth-token-here
-TWILIO_FROM_NUMBER=+1234567890
+# Twilio
+TWILIO_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_TOKEN=your_twilio_auth_token
+TWILIO_FROM=+15551234567
 
-# Discord Webhook (optional)
-DISCORD_WEBHOOK=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
+# SMTP (Gmail example)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=you@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM="Nani Alerts" <you@gmail.com>
+
+# Rate limiting
+# (defaults are fine)
 ```
 
 ### **3. Build & Run**
@@ -268,12 +277,6 @@ npm start
 | GET | /health | Check server status |
 
 ### **Running the Service**
-
-- Development Mode (with hot reload):
-
-```bash
-npm run dev
-```
 
 - Production Build:
 
@@ -298,6 +301,63 @@ curl http://localhost:3000/health
   "papi": "connected",
   "uptime": 123,
   "timestamp": "2025-10-03T12:00:00.000Z"
+}
+```
+
+ **Authentication**
+
+```bash
+ curl -X POST http://localhost:3000/auth -H "Content-Type: application/json"  -d '{"email": "cenwadike@gmail.com"}'
+ ```
+
+ **Expected Response**:
+
+```json
+{
+  "token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJpYXQiOjE3NjIyMTAwMjIsImV4cCI6MTc2NDgwMjAyMn0.GrKypWHQv5CVQ8u4E0F7xTQWk5Ga0CYMgPqNqX02qYM","tenantId":"b3ed617e005ce4db"
+}
+```
+
+ **Setup**
+```json
+ curl -X POST http://localhost:3000/setup \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJpYXQiOjE3NjIyMTAwMjIsImV4cCI6MTc2NDgwMjAyMn0.GrKypWHQv5CVQ8u4E0F7xTQWk5Ga0CYMgPqNqX02qYM" \
+  -d '{
+    "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "plugins": {
+      "activities": ["transfers", "extrinsics"],
+      "notifications": [
+        {
+          "type": "email",
+          "config": {
+            "to": "cenwadike@gmail.com",
+            "subject": "Test from Nani"
+          }
+        }
+      ]
+    }
+  }'             
+```
+  **Expectated Response**
+
+```json
+  {
+    "success":true,"message":"Configuration saved","address":"15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5","plugins":{"activities":["transfers","extrinsics"],"notifications":["email"]}
+  } 
+```
+
+- **Analytics**
+
+```bash
+curl -X GET "http://localhost:3000/stats" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJpYXQiOjE3NjIyMTAwMjIsImV4cCI6MTc2NDgwMjAyMn0.GrKypWHQv5CVQ8u4E0F7xTQWk5Ga0CYMgPqNqX02qYM" \
+  -H "Content-Type: application/json"  
+```
+
+```json
+{
+  "plugin":"basic","stats":{"totalEvents":0,"incoming":0,"outgoing":0,"totalAmountIn":0,"totalAmountOut":0,"firstEvent":null,"lastEvent":null},"logsCount":0
 }
 ```
 

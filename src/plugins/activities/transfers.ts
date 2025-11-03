@@ -84,7 +84,7 @@ const transfers: ActivityPlugin = {
    * @param address - Tenant's Polkadot address
    * @returns Formatted message string
    */
-  async formatMessage(logEntry: any, address: string): Promise<string> {
+  async formatMessage(logEntry: any): Promise<string> {
     const direction = logEntry.direction;
     const other = direction === 'outgoing' ? logEntry.to : logEntry.from;
     const amountFormatted = (logEntry.amount / 1e12).toFixed(4); // Convert planck to WND

@@ -73,7 +73,7 @@ async function processPluginTask(task: {
 
     try {
       const logEntry = await plugin.log(record, address);
-      const message = await plugin.formatMessage(logEntry, address);
+      const message = await plugin.formatMessage(logEntry);
 
       const notifications = plugins.notifications || [];
 

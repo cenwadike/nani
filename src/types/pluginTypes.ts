@@ -59,10 +59,9 @@ export interface ActivityPlugin {
    * @function formatMessage
    * @description Converts a log entry into a human-readable message for notifications.
    * @param logEntry - Structured log data
-   * @param address - Tenant's Polkadot address
    * @returns Notification message string
    */
-  formatMessage(logEntry: any, address: string): Promise<string> | string;
+  formatMessage(logEntry: any): Promise<string> | string;
 }
 
 /**
