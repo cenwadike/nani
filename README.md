@@ -304,10 +304,22 @@ curl http://localhost:3000/health
 }
 ```
 
- **Authentication**
+ **Authentication**(email)
 
 ```bash
  curl -X POST http://localhost:3000/auth -H "Content-Type: application/json"  -d '{"email": "cenwadike@gmail.com"}'
+ ```
+
+ **Authentication**(wallet)
+
+ ```bash
+  curl -X POST http://localhost:3000/auth \
+    -H "Content-Type: application/json" \
+    -d '{
+      "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "signature": "0x...",
+      "message": "Sign in to Nani at 2025-11-04T12:00:00.000Z"
+    }'
  ```
 
  **Expected Response**:

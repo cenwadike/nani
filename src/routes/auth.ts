@@ -23,54 +23,103 @@
 
 /**
  * @file routes/auth.ts
- * @summary Handles tenant authentication and token issuance.
- * @description This route accepts an email address, generates a tenant ID,
- *              issues a JWT token, and stores minimal tenant metadata.
+ * @summary Single adaptive /auth endpoint
+ * @description Accepts EITHER:
+ *   • { email } → email-based JWT
+ *   • { address, signature, message } → wallet-signed JWT
  */
 
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { decodeAddress, signatureVerify } from '@polkadot/util-crypto';
+import { u8aToHex } from '@polkadot/util';
 import config from '../config';
 import storage from '../utils/storage';
+import logger from '../utils/logger';
 
 const router = Router();
 
 /**
  * @route POST /auth
- * @description Authenticates a tenant using their email address.
- *              Generates a tenant ID and returns a signed JWT token.
+ * @body { email?: string } OR { address: string, signature: string, message: string }
  */
-router.post('/', (req: Request, res: Response) => {
-  try {
-    const { email } = req.body;
+router.post('/', async (req: Request, res: Response) => {
+  const { email, address, signature, message } = req.body;
 
-    // Validate email format
-    if (!email || !email.includes('@')) {
+  // ──────────────────────────────────────────────────────────────
+  // 1. EMAIL AUTH
+  // ──────────────────────────────────────────────────────────────
+  if (email) {
+    if (!email.includes('@')) {
       return res.status(400).json({ error: 'Valid email required' });
     }
 
-    // Generate a deterministic tenant ID using SHA-256 hash of the email
-    const tenantId = crypto.createHash('sha256').update(email).digest('hex').substring(0, 16);
+    const tenantId = crypto.createHash('sha256').update(email).digest('hex').slice(0, 16);
+    const token = jwt.sign({ tenantId, email, method: 'email' }, config.jwtSecret, {
+      expiresIn: '30d',
+    });
 
-    // Create a JWT token with tenant metadata
-    const token = jwt.sign(
-      { tenantId, email },
-      config.jwtSecret,
-      { expiresIn: '30d' }
-    );
-
-    // Persist minimal tenant data if not already stored
-    const existingConfig = storage.loadConfig(tenantId);
-    if (!existingConfig) {
-      storage.saveConfig(tenantId, { email, createdAt: new Date().toISOString() });
+    // Ensure tenant exists
+    if (!(await storage.loadConfig(tenantId))) {
+      await storage.saveConfig(tenantId, {
+        email,
+        createdAt: new Date().toISOString(),
+        authMethod: 'email',
+      });
     }
 
-    // Return token and tenant ID to client
-    res.json({ token, tenantId });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logger.event(`Email auth: ${email} → ${tenantId}`);
+    return res.json({ token, tenantId, method: 'email' });
   }
+
+  // ──────────────────────────────────────────────────────────────
+  // 2. WALLET SIGNING AUTH
+  // ──────────────────────────────────────────────────────────────
+  if (address && signature && message) {
+    let publicKey: Uint8Array;
+    try {
+      publicKey = decodeAddress(address);
+    } catch {
+      return res.status(400).json({ error: 'Invalid Polkadot address' });
+    }
+
+    const { isValid } = signatureVerify(message, signature, u8aToHex(publicKey));
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    // Prevent replay attacks
+    const timestamp = new Date(message.split('at ')[1]?.split('Z')[0] || '');
+    const now = new Date();
+    const diffMs = Math.abs(now.getTime() - timestamp.getTime());
+    if (isNaN(timestamp.getTime()) || diffMs > 5 * 60 * 1000) {
+      return res.status(400).json({ error: 'Message expired or malformed' });
+    }
+
+    const tenantId = crypto.createHash('sha256').update(address).digest('hex').slice(0, 16);
+    const token = jwt.sign({ tenantId, address, method: 'wallet' }, config.jwtSecret, {
+      expiresIn: '30d',
+    });
+
+    if (!(await storage.loadConfig(tenantId))) {
+      await storage.saveConfig(tenantId, {
+        address,
+        createdAt: new Date().toISOString(),
+        authMethod: 'wallet',
+      });
+    }
+
+    logger.event(`Wallet auth: ${address} → ${tenantId}`);
+    return res.json({ token, tenantId, method: 'wallet', address });
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // 3. INVALID INPUT
+  // ──────────────────────────────────────────────────────────────
+  return res.status(400).json({
+    error: 'Provide either { email } or { address, signature, message }',
+  });
 });
 
 export default router;
