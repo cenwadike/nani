@@ -58,7 +58,7 @@ const discord: NotificationPlugin = {
     try {
       await axios.post(pluginConfig.webhook, {
         content: message,
-        username: 'Nani Bot',
+        username: 'nani',
       });
       logger.info(`Discord notification sent to ${pluginConfig.webhook}`);
     } catch (error: any) {

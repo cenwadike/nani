@@ -40,7 +40,7 @@ const basic: StatsPlugin = {
    * @returns Object with computed stats including totals, breakdowns, and timestamps
    */
   compute(logs: any[]) {
-    const stats = {
+    let stats = {
       totalEvents: logs.length,
       incoming: 0,
       outgoing: 0,

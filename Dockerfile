@@ -15,6 +15,7 @@ COPY dist ./dist
 
 # Create persistent data directory for tenant storage
 RUN mkdir -p ./data
+RUN mkdir -p ./logs
 
 # Expose the port your Express server listens on
 EXPOSE 3000

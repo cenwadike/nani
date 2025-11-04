@@ -90,7 +90,11 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Prevent replay attacks
-    const timestamp = new Date(message.split('at ')[1]?.split('Z')[0] || '');
+    const match = message.match(/Timestamp: ([\d\-T:.Z]+)/);
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid message format' });
+    }
+    const timestamp = match ? new Date(match[1]) : new Date();
     const now = new Date();
     const diffMs = Math.abs(now.getTime() - timestamp.getTime());
     if (isNaN(timestamp.getTime()) || diffMs > 5 * 60 * 1000) {
