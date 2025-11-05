@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nani API - Real-Time Polkadot Event Streaming</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #fff;
+    }
+
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      padding: 60px 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+      background-size: 50px 50px;
+      animation: grid-move 20s linear infinite;
+    }
+
+    @keyframes grid-move {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(50px, 50px); }
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      font-size: 3.5em;
+      margin-bottom: 20px;
+      font-weight: 800;
+      letter-spacing: -1px;
+    }
+
+    .hero .tagline {
+      font-size: 1.5em;
+      margin-bottom: 30px;
+      opacity: 0.95;
+    }
+
+    .hero .badges {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      padding: 10px 20px;
+      border-radius: 25px;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 15px 35px;
+      border-radius: 30px;
+      font-size: 1.1em;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: white;
+      color: #E6007A;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: white;
+      border: 2px solid white;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Quick Start Section */
+    .quick-start {
+      background: #1a1a2e;
+      padding: 60px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      font-size: 2.5em;
+      margin-bottom: 40px;
+      text-align: center;
+      color: #E6007A;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 30px;
+      margin-bottom: 50px;
+    }
+
+    .step {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 30px;
+      border-radius: 15px;
+      border-left: 4px solid #E6007A;
+      transition: all 0.3s ease;
+    }
+
+    .step:hover {
+      transform: translateY(-5px);
+      background: rgba(230, 0, 122, 0.1);
+    }
+
+    .step-number {
+      font-size: 3em;
+      font-weight: 800;
+      color: #E6007A;
+      line-height: 1;
+      margin-bottom: 15px;
+    }
+
+    .step h3 {
+      font-size: 1.5em;
+      margin-bottom: 10px;
+    }
+
+    .step code {
+      display: block;
+      background: #0a0a0a;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 15px;
+      font-size: 0.85em;
+      overflow-x: auto;
+    }
+
+    /* Features Grid */
+    .features {
+      background: #0a0a0a;
+      padding: 60px 20px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+    }
+
+    .feature-card {
+      background: linear-gradient(135deg, rgba(230, 0, 122, 0.1) 0%, rgba(85, 43, 191, 0.1) 100%);
+      padding: 30px;
+      border-radius: 15px;
+      border: 1px solid rgba(230, 0, 122, 0.3);
+    }
+
+    .feature-icon {
+      font-size: 2.5em;
+      margin-bottom: 15px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.3em;
+      margin-bottom: 10px;
+      color: #E6007A;
+    }
+
+    /* Hide Swagger topbar */
+    .swagger-ui .topbar {
+      display: none;
+    }
+
+    /* Custom Swagger styling */
+    .swagger-ui .info .title {
+      color: #E6007A;
+    }
+
+    .swagger-ui .opblock-tag {
+      border-bottom: 2px solid #E6007A;
+    }
+
+    .swagger-ui .opblock.opblock-post {
+      border-color: #E6007A;
+      background: rgba(230, 0, 122, 0.05);
+    }
+
+    .swagger-ui .opblock.opblock-get {
+      border-color: #552BBF;
+      background: rgba(85, 43, 191, 0.05);
+    }
+
+    /* Try It Out button styling */
+    .swagger-ui .btn.try-out__btn {
+      background: #E6007A;
+      color: white;
+      border: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2.5em;
+      }
+      .hero .tagline {
+        font-size: 1.2em;
+      }
+      .cta-buttons {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Hero Section -->
+  <div class="hero">
+    <div class="hero-content">
+      <h1>⚡ Nani API</h1>
+      <p class="tagline">Real-Time Polkadot Event Streaming in 5 Minutes</p>
+      
+      <div class="badges">
+        <span class="badge">🔗 Multi-Chain</span>
+        <span class="badge">🔐 Bank-Grade Encryption</span>
+        <span class="badge">⚡ Sub-Second Latency</span>
+        <span class="badge">🚀 100K+ Tenants</span>
+      </div>
+
+      <div class="cta-buttons">
+        <a href="#quick-start" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/cenwadike/nani" class="btn btn-secondary" target="_blank">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Start Section -->
+  <div class="quick-start" id="quick-start">
+    <div class="container">
+      <h2 class="section-title">🚀 Quick Start</h2>
+      
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Authenticate</h3>
+          <p>Get your JWT token with email or wallet signature</p>
+          <code>POST /auth</code>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Setup Monitoring</h3>
+          <p>Configure chains, addresses, and notification channels</p>
+          <code>POST /setup</code>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>View Analytics</h3>
+          <p>Get real-time stats computed from encrypted logs</p>
+          <code>GET /stats</code>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <h3>Export Data</h3>
+          <p>Download logs as CSV/JSON for analysis</p>
+          <code>GET /export</code>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-top: 40px;">
+        <a href="docs/" class="btn btn-primary">👇 Try Interactive API Docs Below</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features Section -->
+  <div class="features">
+    <div class="container">
+      <h2 class="section-title">✨ Why Nani?</h2>
+      
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔌</div>
+          <h3>Plugin Architecture</h3>
+          <p>Drop-in activity filters & notification channels. No restart needed. Only open-source event streaming with true extensibility.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>PAPI-Powered Resilience</h3>
+          <p>Built on Polkadot Cloud with automatic RPC failover, graceful reconnection, and multi-endpoint support.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>Multi-Chain Native</h3>
+          <p>Monitor Westend, Asset Hub, Kusama, and more from a single API. Cross-chain aggregation out of the box.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔐</div>
+          <h3>Security First</h3>
+          <p>AES-256 encryption, JWT auth, rate limiting. Your data is encrypted at rest and secured in transit.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Zero-Database Analytics</h3>
+          <p>Stats computed on-demand from logs. No database overhead. PnL, volume, trends - all real-time.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <h3>Production Ready</h3>
+          <p>Supports 100K+ tenants per node. Parallel notifications, async processing, PM2 clustering.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Swagger UI Scripts -->
+  <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      // Fetch OpenAPI spec and render Swagger UI
+      fetch('/openapi.json')
+        .then(response => response.json())
+        .then(spec => {
+          const ui = SwaggerUIBundle({
+            spec: spec,
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            presets: [
+              SwaggerUIBundle.presets.apis,
+              SwaggerUIStandalonePreset
+            ],
+            plugins: [
+              SwaggerUIBundle.plugins.DownloadUrl
+            ],
+            layout: "StandaloneLayout",
+            persistAuthorization: true,
+            tryItOutEnabled: true,
+            displayRequestDuration: true,
+            filter: true,
+            defaultModelsExpandDepth: 3,
+            defaultModelExpandDepth: 3,
+          });
+
+          window.ui = ui;
+
+          // Auto-scroll to API docs when clicking "Try API" button
+          const urlHash = window.location.hash;
+          if (urlHash === 'docs/') {
+            setTimeout(() => {
+              document.getElementById('docs').scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+          }
+        });
+    };
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

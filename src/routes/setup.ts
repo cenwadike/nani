@@ -61,6 +61,106 @@ interface SetupResult {
   error?: string;
 }
 
+/**
+ * @route POST /setup
+ * @body { setups: ChainSetup[] }
+ *
+ * @openapi
+ * /setup:
+ *   post:
+ *     summary: Configure monitored addresses and plugins per chain
+ *     description: |
+ *       Batch configure one or more chains for a tenant. Validates:
+ *       - Chain ID (must exist in `CHAINS`)
+ *       - Polkadot SS58 address
+ *       - Activity plugin names (must be registered)
+ *       - Notification plugin types + config validation via `validateConfig()`
+ *     tags:
+ *       - Setup
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SetupRequest'
+ *           examples:
+ *             single-chain:
+ *               summary: Configure Westend with transfers + Discord alerts
+ *               value:
+ *                 setups:
+ *                   - chainId: westend
+ *                     address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+ *                     plugins:
+ *                       activities: [transfer]
+ *                       notifications:
+ *                         - type: discord
+ *                           config:
+ *                             webhookUrl: https://discord.com/api/webhooks/...
+ *             multi-chain:
+ *               summary: Configure two chains
+ *               value:
+ *                 setups:
+ *                   - chainId: polkadot
+ *                     address: 14E5wP1t7g8Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3
+ *                     plugins:
+ *                       activities: [transfer, staking]
+ *                       notifications:
+ *                         - type: email
+ *                           config:
+ *                             to: alice@example.com
+ *                   - chainId: westend
+ *                     address: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+ *                     plugins:
+ *                       activities: [governance]
+ *                       notifications: []
+ *     responses:
+ *       '200':
+ *         description: All configurations saved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SetupSuccessResponse'
+ *             examples:
+ *               success:
+ *                 summary: All chains configured
+ *                 value:
+ *                   success: true
+ *                   message: All chain configs saved
+ *                   results:
+ *                     - chainId: westend
+ *                       success: true
+ *                       address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+ *                       tokenSymbol: WND
+ *       '400':
+ *         description: Validation failed for one or more setups
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SetupErrorResponse'
+ *             examples:
+ *               invalid-chain:
+ *                 summary: Invalid chain ID
+ *                 value:
+ *                   success: false
+ *                   message: 1 config(s) failed
+ *                   results:
+ *                     - chainId: invalid-chain
+ *                       success: false
+ *                       error: "Invalid chainId. Valid: [polkadot, westend, kusama]"
+ *               invalid-address:
+ *                 summary: Invalid SS58 address
+ *                 value:
+ *                   success: false
+ *                   message: 1 config(s) failed
+ *                   results:
+ *                     - chainId: westend
+ *                       success: false
+ *                       error: Invalid SS58 address
+ *       '500':
+ *         description: Internal server error
+ */
 router.post('/', async (req: Request, res: Response) => {
   const tenantId = (req as any).tenantId;
   const { setups } = req.body;

@@ -128,6 +128,101 @@ const tenantDir = storage.getTenantDir(tenantId);
 /* --------------------------------------------------------------------- */
 /* GET /stats                                                            */
 /* --------------------------------------------------------------------- */
+/**
+ * @route GET /stats
+ * @query { plugin=basic, chainId?, from?, to? }
+ * @description
+ *   • ?plugin=basic → default stats plugin  
+ *   • ?chainId=westend → limit to one chain  
+ *   • ?from=2025-11-01&to=2025-11-05 → date range filter
+ *
+ * @openapi
+ * /stats:
+ *   get:
+ *     summary: Compute analytics using a pluggable stats plugin
+ *     description: |
+ *       Returns computed statistics from tenant logs using the specified `stats` plugin.
+ *       Includes:
+ *       - Filtered log count
+ *       - Plugin-specific `stats` result
+ *       - On-disk storage metadata (file count, size per chain)
+ *     tags:
+ *       - Stats
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: plugin
+ *         schema:
+ *           type: string
+ *           default: basic
+ *         required: false
+ *         description: Name of the registered stats plugin
+ *         example: basic
+ *       - in: query
+ *         name: chainId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Filter logs to a single chain
+ *         example: westend
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *           format: date
+ *         required: false
+ *         description: Inclusive start date (UTC, YYYY-MM-DD)
+ *         example: 2025-11-01
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *           format: date
+ *         required: false
+ *         description: Inclusive end date (UTC, YYYY-MM-DD)
+ *         example: 2025-11-05
+ *     responses:
+ *       '200':
+ *         description: Analytics computed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StatsResponse'
+ *             examples:
+ *               basic-plugin:
+ *                 summary: Basic stats for westend (last 5 days)
+ *                 value:
+ *                   plugin: basic
+ *                   filters:
+ *                     chainId: westend
+ *                     from: 2025-11-01
+ *                     to: 2025-11-05
+ *                   result:
+ *                     logsProcessed: 842
+ *                     stats:
+ *                       totalTransfers: 320
+ *                       totalStaked: "124500000000000"
+ *                       uniqueValidators: 12
+ *                   storage:
+ *                     totalSizeBytes: 2841293
+ *                     totalSizeMB: 2.71
+ *                     logFileCount: 5
+ *                     chainCount: 1
+ *                     chains:
+ *                       - chainId: westend
+ *                         logCount: 842
+ *                         sizeBytes: 2841293
+ *                   generatedAt: "2025-11-05T14:22:10.123Z"
+ *       '400':
+ *         description: Invalid query parameters
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: Invalid "from" date
+ *       '500':
+ *         description: Internal server error
+ */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req as any;

@@ -45,6 +45,98 @@ import logger from '../utils/logger';
 
 const router = Router();
 
+/**
+ * @route GET /export
+ * @query { chainId?, type?, format=csv, from?, to? }
+ * @description
+ *   • ?chainId=westend&type=governance → westend-gov.csv  
+ *   • ?chainId=westend&type=transfer,staking → ZIP with transfer+staking CSVs  
+ *   • ?from=2025-11-01&to=2025-11-05 → date range filter
+ *
+ * @openapi
+ * /export:
+ *   get:
+ *     summary: Export tenant event logs (CSV / JSON / ZIP)
+ *     tags:
+ *       - Export
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: chainId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Filter by chain (e.g. westend, polkadot)
+ *         example: westend
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Comma-separated event types. Omit for all.
+ *         example: transfer,staking
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [csv, json]
+ *           default: csv
+ *         required: false
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *           format: date
+ *         required: false
+ *         description: Inclusive start date (YYYY-MM-DD)
+ *         example: 2025-11-01
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *           format: date
+ *         required: false
+ *         description: Inclusive end date (YYYY-MM-DD)
+ *         example: 2025-11-05
+ *     responses:
+ *       '200':
+ *         description: |
+ *           - **CSV**: Single file or ZIP (one CSV per type)  
+ *           - **JSON**: `{ logs: [...] }`  
+ *           Filename set via `Content-Disposition`
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/zip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 logs:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/EventLog'
+ *       '400':
+ *         description: Invalid query parameters
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: Invalid "from" date
+ *       '404':
+ *         description: No logs match filters
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: No logs for requested type(s)
+ *       '500':
+ *         description: Internal error
+ */
 router.get('/', async (req: Request, res: Response) => {
   const tenantId = (req as any).tenantId;
   const {

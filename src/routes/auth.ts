@@ -74,6 +74,72 @@ const loadTenantMetadata = async (tenantId: string): Promise<any | null> => {
 /**
  * @route POST /auth
  * @body { email?: string } OR { address: string, signature: string, message: string }
+ *
+ * @openapi
+ * /auth:
+ *   post:
+ *     summary: Generate JWT token via email or wallet signature
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             oneOf:
+ *               - $ref: '#/components/schemas/AuthEmailRequest'
+ *               - $ref: '#/components/schemas/AuthWalletRequest'
+ *           examples:
+ *             email:
+ *               summary: Email-based login
+ *               value:
+ *                 email: alice@example.com
+ *             wallet:
+ *               summary: Wallet-signed login
+ *               value:
+ *                 address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+ *                 signature: 0x8f5a4c2e1b...
+ *                 message: |
+ *                   Sign this message to authenticate with Nani.
+ *                   Timestamp: 2025-11-05T12:34:56.789Z
+ *     responses:
+ *       '200':
+ *         description: JWT generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthSuccessResponse'
+ *             examples:
+ *               email:
+ *                 value:
+ *                   token: eyJhbGciOiJIUzI1NiIs...
+ *                   tenantId: a1b2c3d4e5f6g7h8
+ *                   method: email
+ *               wallet:
+ *                 value:
+ *                   token: eyJhbGciOiJIUzI1NiIs...
+ *                   tenantId: 9f86d081884c7d65
+ *                   method: wallet
+ *                   address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+ *       '400':
+ *         description: Invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *             example:
+ *               error: Provide either { email } or { address, signature, message }
+ *       '401':
+ *         description: Invalid wallet signature
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: Invalid signature
+ *       '500':
+ *         description: Server error
  */
 router.post('/', async (req: Request, res: Response) => {
   const { email, address, signature, message } = req.body;
