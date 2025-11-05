@@ -28,55 +28,118 @@
  *              - `record.extrinsic` → the signed extrinsic
  *              - `record.events`   → array of events in the block
  */
+// SPDX-License-Identifier: MIT
+// plugins/activities/extrinsic.ts
 
 import { ActivityPlugin } from '../../types/pluginTypes';
 import logger from '../../utils/logger';
 
-const extrinsic: ActivityPlugin = {
-  name: 'extrinsic',
+/**
+ * @file plugins/activities/extrinsic.ts
+ * @summary Multichain activity plugin that matches ANY extrinsic signed by the tenant address.
+ * @description Works on any Polkadot-based chain (westend, asset-hub-westend, kusama, etc.).
+ *              Uses `record.extrinsic` from block listener.
+ */
+
+const extrinsics: ActivityPlugin = {
+  name: 'extrinsics',
 
   /**
    * @function filter
-   * @description Returns true if the extrinsic was signed by the tenant address.
+   * @param record - Block listener record
+   * @param address - Tenant address (SS58)
+   * @param chainId - Chain name (e.g., "westend")
+   * @param tokenSymbol - Native token (e.g., "WND")
+   * @returns true if extrinsic was signed by address
    */
-  async filter(record: any, address: string): Promise<boolean> {
+  filter(
+    record: any,
+    address: string,
+    chainId: string,
+    tokenSymbol?: string
+  ): boolean {
     try {
-      const signer = record.extrinsic?.signature?.signer?.toString();
-      const match = signer === address;
-      if (match) logger.event(`Extrinsic matched: signer ${signer}`);
-      return match;
-    } catch (err) {
-      logger.error(`extrinsic.filter error: ${err}`);
+      const ext = record.extrinsic;
+      if (!ext?.signature?.signer) return false;
+
+      const signer = ext.signature.signer.toString();
+      const isMatch = signer === address;
+
+      if (isMatch) {
+        logger.event(`[${chainId}] Extrinsic matched: ${signer} → ${methodString(ext)}`);
+      }
+
+      return isMatch;
+    } catch (err: any) {
+      logger.error(`[${chainId}] extrinsic.filter error: ${err.message}`);
       return false;
     }
   },
 
   /**
    * @function log
-   * @description Extracts useful metadata from the extrinsic.
+   * @returns Enriched log entry with chain context
    */
-  async log(record: any, address: string): Promise<any> {
+  async log(
+    record: any,
+    address: string,
+    chainId: string,
+    tokenSymbol: string
+  ): Promise<any> {
     const ext = record.extrinsic;
     const method = ext?.method;
+
+    const blockNumber = record.blockNumber?.toNumber() ?? 'unknown';
+    const blockHash = record.blockHash?.toHex() ?? 'unknown';
+    const extrinsicIndex = record.phase?.isApplyExtrinsic
+      ? record.phase.asApplyExtrinsic.toNumber()
+      : undefined;
+
     return {
       timestamp: new Date().toISOString(),
       type: 'extrinsic',
-      section: method?.section || 'unknown',
-      method: method?.method || 'unknown',
-      signer: ext?.signature?.signer?.toString() || 'unknown',
-      blockNumber: record.phase?.asApplyExtrinsic || 'unknown',
+      chainId,
+      tokenSymbol,
+      section: method?.section ?? 'unknown',
+      method: method?.method ?? 'unknown',
+      signer: ext?.signature?.signer?.toString() ?? 'unknown',
+      blockNumber,
+      blockHash,
+      extrinsicIndex,
+      args: method?.args?.toHuman?.() ?? method?.args?.toJSON?.() ?? null,
     };
   },
 
   /**
    * @function formatMessage
-   * @description Human-readable summary.
+   * @param logEntry - Structured log from `log()`
+   * @returns Human-readable message with chain context
    */
   async formatMessage(logEntry: any): Promise<string> {
-    const { section, method, signer } = logEntry;
-    const short = signer.substring(0, 8) + '…';
-    return `EXTRINSIC: ${section}.${method} by ${short}`;
+    const {
+      chainId,
+      tokenSymbol,
+      section,
+      method,
+      signer,
+      blockNumber,
+    } = logEntry;
+
+    const shortSigner = signer ? `${signer.slice(0, 6)}…${signer.slice(-4)}` : 'unknown';
+    const blockInfo = blockNumber !== 'unknown' ? ` #${blockNumber}` : '';
+    const chainBadge = chainId === 'westend' ? 'WESTEND' : chainId.toUpperCase();
+
+    return `EXTRINSIC [${chainBadge}] ${section}.${method} by ${shortSigner}${blockInfo}`;
   },
 };
 
-export default extrinsic;
+// ──────────────────────────────────────────────────────────────────────
+// Helper: Human-readable method string
+// ──────────────────────────────────────────────────────────────────────
+function methodString(ext: any): string {
+  const m = ext?.method;
+  if (!m) return 'unknown';
+  return `${m.section}.${m.method}`;
+}
+
+export default extrinsics;

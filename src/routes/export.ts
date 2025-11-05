@@ -27,64 +27,222 @@
  * @description This route allows authenticated tenants to download their encrypted event logs
  *              in either CSV or JSON format. The CSV output is formatted for readability and analysis.
  */
+// SPDX-License-Identifier: MIT
+// routes/export.ts
+/**
+ * @file routes/export.ts
+ * @summary Export logs with per-type CSV files + time/chain filtering
+ * @description
+ *   • ?chainId=westend&type=governance → westend-gov.csv
+ *   • ?chainId=westend&type=transfer,staking → westend-transfer+staking.csv
+ *   • ?chainId=westend → westend.csv (all types)
+ *   • ?from=2025-11-01&to=2025-11-05
+ */
 
 import { Router, Request, Response } from 'express';
 import storage from '../utils/storage';
+import logger from '../utils/logger';
 
 const router = Router();
 
-/**
- * @route GET /export
- * @description Returns tenant logs in the requested format (`csv` or `json`).
- *              Defaults to CSV if no format is specified.
- */
 router.get('/', async (req: Request, res: Response) => {
+  const tenantId = (req as any).tenantId;
+  const {
+    chainId,
+    type: typeParam,
+    format = 'csv',
+    from: fromStr,
+    to: toStr,
+  } = req.query as {
+    chainId?: string;
+    type?: string;
+    format?: 'csv' | 'json';
+    from?: string;
+    to?: string;
+  };
+
   try {
-    const { tenantId } = req as any;
-    const { format = 'csv' } = req.query as { format?: string };
+    // ──────────────────────────────────────────────────────────────
+    // 1. Parse time range
+    // ──────────────────────────────────────────────────────────────
+    let fromDate: Date | null = null;
+    let toDate: Date | null = null;
 
-    // Load logs from encrypted tenant storage
-    const logs = await storage.loadLogs(tenantId);
-
-    if (logs.length === 0) {
-      return res.status(404).json({ error: 'No logs found' });
+    if (fromStr) {
+      fromDate = new Date(fromStr);
+      if (isNaN(fromDate.getTime())) return res.status(400).json({ error: 'Invalid "from" date' });
+      fromDate.setHours(0, 0, 0, 0);
+    }
+    if (toStr) {
+      toDate = new Date(toStr);
+      if (isNaN(toDate.getTime())) return res.status(400).json({ error: 'Invalid "to" date' });
+      toDate.setHours(23, 59, 59, 999);
+    }
+    if (fromDate && toDate && fromDate > toDate) {
+      return res.status(400).json({ error: '"from" must be before "to"' });
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // 2. Load & filter logs
+    // ──────────────────────────────────────────────────────────────
+    const allLogs = await storage.loadLogs(tenantId);
+    const filtered = allLogs.filter((log) => {
+      const logTime = new Date(log.timestamp).getTime();
+      if (chainId && log.chain !== chainId) return false;
+      if (fromDate && logTime < fromDate.getTime()) return false;
+      if (toDate && logTime > toDate.getTime()) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      const err = Buffer.from(JSON.stringify({ error: 'No logs match filters' }));
+      return sendFile(res, err, `nani-${tenantId}-no-data.json`, 'application/json');
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 3. Determine export mode
+    // ──────────────────────────────────────────────────────────────
+    const requestedTypes = typeParam
+      ? typeParam.split(',').map(t => t.trim().toLowerCase())
+      : null;
+
+    const typesToExport = requestedTypes
+      ? [...new Set(filtered.map(l => l.type).filter(t => requestedTypes.includes(t.toLowerCase())))]
+      : [...new Set(filtered.map(l => l.type))];
+
+    if (typesToExport.length === 0) {
+      return res.status(404).json({ error: 'No logs for requested type(s)' });
+    }
+
+    const dateRange = fromStr && toStr ? `${fromStr}_to_${toStr}` : '';
+    const chainPart = chainId ? `-${chainId}` : '';
+
+    // ──────────────────────────────────────────────────────────────
+    // 4. CSV: One file per type (or one combined)
+    // ──────────────────────────────────────────────────────────────
     if (format === 'csv') {
-      // Define CSV headers
-      const headers = ['Timestamp', 'Type', 'Direction', 'From', 'To', 'Amount', 'Block'];
 
-      // Format each log entry into a CSV row
-      const rows = logs.map((log: any) => [
-        log.timestamp,
-        log.type,
-        log.direction,
-        log.from,
-        log.to,
-        (log.amount / 1e12).toFixed(4), // Convert planck to DOT
-        log.blockNumber,
-      ]);
+      // Single file: all types
+      if (!requestedTypes || typesToExport.length === 1) {
+        const type = typesToExport[0];
+        const logs = requestedTypes ? filtered.filter(l => l.type === type) : filtered;
+        const filename = requestedTypes
+          ? `nani-${tenantId}${chainPart}-${type}${dateRange ? '-' + dateRange : ''}.csv`
+          : `nani-${tenantId}${chainPart}${dateRange ? '-' + dateRange : ''}.csv`;
 
-      // Assemble CSV string
-      const csv = [
-        headers.join(','),
-        ...rows.map((row: string[]) => row.map((cell) => `"${cell}"`).join(',')),
-      ].join('\n');
+        const csv = buildCsv(logs, typesToExport);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(csv);
+      }
 
-      // Set response headers for file download
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="nani-logs-${tenantId}.csv"`);
-      res.send(csv);
-    } else if (format === 'json') {
-      // Return logs as JSON
-      res.json({ logs });
-    } else {
-      // Unsupported format
-      res.status(400).json({ error: 'Invalid format. Use csv or json' });
+      // Multiple files: ZIP with one CSV per type
+      const { default: archiver } = await import('archiver');
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="nani-${tenantId}${chainPart}-export${dateRange ? '-' + dateRange : ''}.zip"`);
+      archive.pipe(res);
+
+      for (const type of typesToExport) {
+        const logs = filtered.filter(l => l.type === type);
+        const csv = buildCsv(logs, [type]);
+        const filename = `nani-${tenantId}${chainPart}-${type}.csv`;
+        archive.append(csv, { name: filename });
+      }
+
+      await archive.finalize();
+      return;
     }
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+
+    // ──────────────────────────────────────────────────────────────
+    // 5. JSON: Always one file
+    // ──────────────────────────────────────────────────────────────
+    if (format === 'json') {
+      const filename = `nani-${tenantId}${chainPart}${requestedTypes ? '-' + typesToExport.join('+') : ''}${dateRange ? '-' + dateRange : ''}.json`;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.json({ logs: filtered.filter(l => typesToExport.includes(l.type)) });
+    }
+
+    return res.status(400).json({ error: 'Invalid format' });
+  } catch (err: any) {
+    logger.error(`Export failed: ${err.message}`);
+    return res.status(500).json({ error: err.message });
   }
 });
+
+// ──────────────────────────────────────────────────────────────────
+// Helper: Build CSV for given logs and types
+// ──────────────────────────────────────────────────────────────────
+function buildCsv(logs: any[], types: string[]): string {
+  const baseHeaders = ['Timestamp', 'Chain', 'Token', 'Type'];
+  const typeColumns: Record<string, string[]> = {
+    transfer: ['Direction', 'From', 'To', 'Amount (Token)', 'Amount (Planck)'],
+    staking: ['Direction', 'Validator', 'Reward (Token)', 'Reward (Planck)', 'Era', 'Total Era Stake'],
+    governance: ['Action', 'Referendum', 'Vote', 'Track'],
+    extrinsic: ['Signer', 'Section', 'Method'],
+  };
+
+  const extraHeaders = types.flatMap(t => typeColumns[t] || []);
+  const headers = [...baseHeaders, ...extraHeaders, 'Block'];
+
+  const rows = logs.map(log => {
+    const row: string[] = [log.timestamp, log.chain ?? '', log.token ?? '', log.type];
+
+    switch (log.type) {
+      case 'transfer':
+        row.push(
+          log.direction ?? '',
+          log.from ?? '',
+          log.to ?? '',
+          log.amount != null ? (log.amount / 1e12).toFixed(6) : '',
+          log.amount?.toString() ?? ''
+        );
+        break;
+      case 'staking':
+        row.push(
+          log.direction ?? '',
+          log.validator?.name ?? log.validator?.address ?? '',
+          log.amount != null ? (log.amount / 1e12).toFixed(6) : '',
+          log.amountPlanck?.toString() ?? '',
+          log.era?.toString() ?? '',
+          log.totalEraStake != null ? log.totalEraStake.toFixed(2) : ''
+        );
+        break;
+      case 'governance':
+        row.push(
+          log.action ?? '',
+          log.referendum?.id?.toString() ?? '',
+          log.vote?.aye !== undefined ? (log.vote.aye ? 'Aye' : 'Nay') : '',
+          log.referendum?.track != null ? log.referendum.track.toString() : ''
+        );
+        break;
+      case 'extrinsic':
+        row.push(
+          log.signer ?? '',
+          log.section ?? '',
+          log.method ?? ''
+        );
+        break;
+      default:
+        row.push(...Array(extraHeaders.length).fill(''));
+    }
+
+    row.push(log.blockNumber?.toString() ?? '');
+    return row;
+  });
+
+  return [
+    headers.join(','),
+    ...rows.map(r => r.map(c => `"${c}"`).join(',')),
+  ].join('\n');
+}
+
+function sendFile(res: Response, buffer: Buffer, filename: string, mime: string) {
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
+}
 
 export default router;

@@ -5,7 +5,7 @@
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including but not limited to the rights
+// in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
@@ -30,7 +30,7 @@
  */
 
 import workerpool from 'workerpool';
-import { getPlugin } from '../utils/pluginRegistry';
+import { getPlugin, ensurePluginsLoaded } from '../utils/pluginRegistry';
 import { ActivityPlugin, NotificationPlugin } from '../types/pluginTypes';
 import logger from './logger';
 
@@ -38,15 +38,20 @@ import logger from './logger';
  * @function processPluginTask
  * @description Processes a blockchain event for a specific tenant using configured plugins.
  *              Filters relevant activity events, formats messages, and dispatches notifications.
- * @param task - Contains the event record, tenant ID, and plugin configuration
+ * @param task - Contains the event record, tenant ID, config, chainId, and tokenSymbol
  * @returns {Promise<any[]>} Array of settled notification promises
  */
 async function processPluginTask(task: {
   record: any;
   tenantId: string;
   config: any;
+  chainId: string;
+  tokenSymbol: string;
 }): Promise<any[]> {
-  const { record, tenantId, config } = task;
+  // Ensure plugins are loaded in this worker context (only runs once per worker)
+  ensurePluginsLoaded();
+
+  const { record, tenantId, config, chainId, tokenSymbol } = task;
   const { address, plugins } = config;
   const results: Promise<any>[] = [];
 
@@ -55,7 +60,10 @@ async function processPluginTask(task: {
     return [];
   }
 
-  logger.event(`Processing event for tenant ${tenantId} with ${plugins.activities?.length || 0} activity plugins`);
+  logger.event(
+    `Processing event for tenant ${tenantId} on chain ${chainId} (${tokenSymbol}) ` +
+    `with ${plugins.activities?.length || 0} activity plugins`
+  );
 
   const activities = plugins.activities || [];
 
@@ -66,13 +74,15 @@ async function processPluginTask(task: {
       continue;
     }
 
-    const isRelevant = await plugin.filter(record, address);
+    // Pass chainId and tokenSymbol
+    const isRelevant = await plugin.filter(record, address, chainId);
     if (!isRelevant) continue;
 
-    logger.event(`Activity matched: ${act} for tenant ${tenantId}`);
+    logger.event(`Activity matched: ${act} for tenant ${tenantId} on ${chainId}`);
 
     try {
-      const logEntry = await plugin.log(record, address);
+      // Pass chainId and tokenSymbol
+      const logEntry = await plugin.log(record, address, chainId, tokenSymbol);
       const message = await plugin.formatMessage(logEntry);
 
       const notifications = plugins.notifications || [];
@@ -84,7 +94,7 @@ async function processPluginTask(task: {
           continue;
         }
 
-        logger.event(`Dispatching notification via ${notif.type} for tenant ${tenantId}`);
+        logger.event(`Dispatching via ${notif.type} → ${tenantId}`);
         results.push(notifPlugin.execute(message, notif.config));
       }
     } catch (error: any) {
@@ -92,9 +102,9 @@ async function processPluginTask(task: {
     }
   }
 
-  logger.info(`Completed plugin task for tenant ${tenantId}`);
+  logger.info(`Completed plugin task for tenant ${tenantId} on ${chainId}`);
   return Promise.allSettled(results);
 }
 
-// Register the worker function with workerpool
+// Register with workerpool
 workerpool.worker({ processPluginTask });

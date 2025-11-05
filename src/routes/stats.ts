@@ -27,45 +27,172 @@
  * @description This route allows authenticated tenants to request computed statistics
  *              from their event logs using a selected stats plugin. Results are returned
  *              in JSON format along with plugin metadata and log count.
+ */// SPDX-License-Identifier: MIT
+/**
+ * @file routes/stats.ts
+ * @summary Storage-aware analytics endpoint
+ *
+ *  ?plugin=basic          → default stats plugin
+ *  ?chainId=westend       → limit to one chain
+ *  ?from=2025-11-01
+ *  ?to=2025-11-05
  */
 
 import { Router, Request, Response } from 'express';
 import storage from '../utils/storage';
 import { getPlugin } from '../utils/pluginRegistry';
 import { StatsPlugin } from '../types/pluginTypes';
+import path from 'path';
+import { promises as fsp, existsSync } from 'fs';
 
 const router = Router();
 
-/**
- * @route GET /stats
- * @description Computes and returns statistics from tenant logs using the specified plugin.
- *              Defaults to the 'basic' stats plugin if none is provided.
- */
+/* --------------------------------------------------------------------- */
+/* Helper – load logs for a *single* chain (optional)                     */
+/* --------------------------------------------------------------------- */
+async function loadChainLogs(
+  tenantId: string,
+  chainId: string | undefined,
+  from?: Date,
+  to?: Date
+): Promise<any[]> {
+  // 1. Load *all* logs (the existing implementation already walks the whole
+  //    `logs/` tree and decrypts line-by-line)
+  const all = await storage.loadLogs(tenantId);
+
+  // 2. Filter by chain + optional date window
+  return all.filter((log) => {
+    if (chainId && log.chain !== chainId) return false;
+    const ts = new Date(log.timestamp).getTime();
+    if (from && ts < from.getTime()) return false;
+    if (to && ts > to.getTime()) return false;
+    return true;
+  });
+}
+
+/* --------------------------------------------------------------------- */
+/* Helper – collect storage statistics                                   */
+/* --------------------------------------------------------------------- */
+interface ChainStat {
+  chainId: string;
+  logCount: number;
+  sizeBytes: number;
+}
+interface StorageMeta {
+  totalSizeBytes: number;
+  logFileCount: number;
+  chainCount: number;
+  chains: ChainStat[];
+}
+
+async function getStorageMeta(tenantId: string, logs: any[]): Promise<StorageMeta> {
+const tenantDir = storage.getTenantDir(tenantId);
+  const logsDir = path.join(tenantDir, 'logs');
+
+  const meta: StorageMeta = {
+    totalSizeBytes: 0,
+    logFileCount: 0,
+    chainCount: 0,
+    chains: [],
+  };
+
+  // ---- chain list ----------------------------------------------------
+  const chainIds = await storage.getChainIdsForTenant(tenantId);
+  meta.chainCount = chainIds.length;
+
+  // ---- per-chain log count & approximate size ------------------------
+  for (const cid of chainIds) {
+    const chainLogs = logs.filter((l) => l.chain === cid);
+    const size = chainLogs.reduce((s, l) => s + JSON.stringify(l).length, 0);
+    meta.chains.push({ chainId: cid, logCount: chainLogs.length, sizeBytes: size });
+  }
+
+  // ---- walk the actual log files to get exact on-disk size ----------
+  if (existsSync(logsDir)) {
+    const months = await fsp.readdir(logsDir);
+    for (const month of months) {
+      const monthPath = path.join(logsDir, month);
+      const days = await fsp.readdir(monthPath);
+      meta.logFileCount += days.length;
+      for (const day of days) {
+        const file = path.join(monthPath, day);
+        const st = await fsp.stat(file);
+        meta.totalSizeBytes += st.size;
+      }
+    }
+  }
+
+  return meta;
+}
+
+/* --------------------------------------------------------------------- */
+/* GET /stats                                                            */
+/* --------------------------------------------------------------------- */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req as any;
-    const { plugin = 'basic' } = req.query as { plugin?: string };
+    const {
+      plugin: pluginName = 'basic',
+      chainId,
+      from: fromStr,
+      to: toStr,
+    } = req.query as {
+      plugin?: string;
+      chainId?: string;
+      from?: string;
+      to?: string;
+    };
 
-    // Load tenant logs from encrypted storage
-    const logs = await storage.loadLogs(tenantId);
-
-    // Retrieve the requested stats plugin
-    const statsPlugin = getPlugin('stats', plugin) as StatsPlugin;
-    if (!statsPlugin) {
-      return res.status(400).json({ error: `Unknown stats plugin: ${plugin}` });
+    // ---- 1. parse optional date window --------------------------------
+    let from: Date | undefined;
+    let to: Date | undefined;
+    if (fromStr) {
+      from = new Date(fromStr);
+      if (isNaN(from.getTime())) return res.status(400).json({ error: 'Invalid "from" date' });
+      from.setHours(0, 0, 0, 0);
+    }
+    if (toStr) {
+      to = new Date(toStr);
+      if (isNaN(to.getTime())) return res.status(400).json({ error: 'Invalid "to" date' });
+      to.setHours(23, 59, 59, 999);
+    }
+    if (from && to && from > to) {
+      return res.status(400).json({ error: '"from" must be before "to"' });
     }
 
-    // Compute statistics using the plugin
-    const stats = statsPlugin.compute(logs);
+    // ---- 2. load (and filter) logs ------------------------------------
+    const logs = await loadChainLogs(tenantId, chainId, from, to);
 
-    // Return computed stats and metadata
+    // ---- 3. storage metadata -------------------------------------------
+    const storageMeta = await getStorageMeta(tenantId, logs);
+
+    // ---- 4. run the requested stats plugin ----------------------------
+    const plugin = getPlugin('stats', pluginName) as StatsPlugin | undefined;
+    if (!plugin) {
+      return res.status(400).json({ error: `Unknown stats plugin: ${pluginName}` });
+    }
+    const computed = plugin.compute(logs);
+
+    // ---- 5. final payload ---------------------------------------------
     res.json({
-      plugin,
-      stats,
-      logsCount: logs.length,
+      plugin: pluginName,
+      filters: {
+        chainId: chainId ?? null,
+        from: fromStr ?? null,
+        to: toStr ?? null,
+      },
+      result: {
+        logsProcessed: logs.length,
+        stats: computed,
+      },
+      storage: {
+        ...storageMeta,
+        totalSizeMB: Number((storageMeta.totalSizeBytes / (1024 * 1024)).toFixed(2)),
+      },
+      generatedAt: new Date().toISOString(),
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -22,7 +22,7 @@
 // SOFTWARE.
 
 /**
- * @file plugins/activities/discord.ts
+ * @file plugins/notifications/discord.ts
  * @summary Notification plugin for sending messages to Discord via webhook.
  * @description Implements the NotificationPlugin interface to deliver formatted messages
  *              to a Discord channel using a configured webhook URL.
@@ -41,6 +41,7 @@ const discord: NotificationPlugin = {
    */
   init(): void {
     // No initialization needed
+    logger.info('Discord plugin initialized');
   },
 
   /**
@@ -74,8 +75,14 @@ const discord: NotificationPlugin = {
    * @returns True if valid, otherwise throws an error
    */
   validateConfig(pluginConfig: any): boolean {
+    if (!pluginConfig || typeof pluginConfig !== 'object') {
+      throw new Error('Discord plugin requires config object');
+    }
     if (!pluginConfig.webhook) {
       throw new Error('Discord plugin requires webhook URL');
+    }
+    if (typeof pluginConfig.webhook !== 'string') {
+      throw new Error('Discord webhook must be a string');
     }
     if (!pluginConfig.webhook.includes('discord.com/api/webhooks/')) {
       throw new Error('Invalid Discord webhook URL');

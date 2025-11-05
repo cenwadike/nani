@@ -36,20 +36,18 @@ import logger from './logger';
 import { promises as fsPromises } from 'fs';
 
 // ──────────────────────────────────────────────────────────────────────
-//  DATA ROOT – same level as `logs/`, `src/`, etc.
-//  → /project/src/data/<tenantId>/...
+//  DATA ROOT
 // ──────────────────────────────────────────────────────────────────────
 const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 const DATA_ROOT = path.join(PROJECT_ROOT, 'src', 'data');
 
-// Ensure root exists
 if (!fs.existsSync(DATA_ROOT)) {
   fs.mkdirSync(DATA_ROOT, { recursive: true });
   logger.info(`Created data root: ${DATA_ROOT}`);
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  ENCRYPTION HELPERS
+//  ENCRYPTION
 // ──────────────────────────────────────────────────────────────────────
 const encrypt = (data: any): string =>
   CryptoJS.AES.encrypt(JSON.stringify(data), config.encryptionKey).toString();
@@ -60,8 +58,17 @@ const decrypt = (encrypted: string): any => {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-//  TENANT DIRECTORY
+//  TENANT + CHAIN DIRECTORY
 // ──────────────────────────────────────────────────────────────────────
+const getChainDir = (tenantId: string, chainId: string): string => {
+  const dir = path.join(DATA_ROOT, tenantId, chainId);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    logger.info(`Created chain dir: ${dir}`);
+  }
+  return dir;
+};
+
 const getTenantDir = (tenantId: string): string => {
   const dir = path.join(DATA_ROOT, tenantId);
   if (!fs.existsSync(dir)) {
@@ -72,25 +79,47 @@ const getTenantDir = (tenantId: string): string => {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-//  CONFIG (encrypted, single file)
+//  PER-CHAIN CONFIG (ONLY)
 // ──────────────────────────────────────────────────────────────────────
-export const saveConfig = async (tenantId: string, cfg: any): Promise<void> => {
-  const file = path.join(getTenantConfigDir(tenantId), 'config.json');
+export const saveChainConfig = async (
+  tenantId: string,
+  chainId: string,
+  cfg: any
+): Promise<void> => {
+  const file = path.join(getChainDir(tenantId, chainId), 'config.json');
   await fsPromises.writeFile(file, encrypt(cfg), 'utf8');
   logger.info(`Config saved → ${file}`);
 };
 
-export const loadConfig = async (tenantId: string): Promise<any | null> => {
-  const file = path.join(getTenantConfigDir(tenantId), 'config.json');
+export const loadChainConfig = async (
+  tenantId: string,
+  chainId: string
+): Promise<any | null> => {
+  const file = path.join(DATA_ROOT, tenantId, chainId, 'config.json');
   if (!fs.existsSync(file)) return null;
   const data = await fsPromises.readFile(file, 'utf8');
   return decrypt(data);
 };
 
-const getTenantConfigDir = (tenantId: string): string => getTenantDir(tenantId);
+export const getChainIdsForTenant = async (tenantId: string): Promise<string[]> => {
+  const tenantDir = getTenantDir(tenantId);
+  const entries = await fsPromises.readdir(tenantDir);
+  const chainIds: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(tenantDir, entry);
+    const stat = await fsPromises.stat(fullPath);
+    if (stat.isDirectory() && entry !== 'logs') {
+      chainIds.push(entry);
+    }
+  }
+
+  logger.info(`Found ${chainIds.length} chain(s) for tenant ${tenantId}: [${chainIds.join(', ')}]`);
+  return chainIds;
+};
 
 // ──────────────────────────────────────────────────────────────────────
-//  LOGS – Monthly folders, Daily JSONL files (encrypted per file)
+//  LOGS – Per-tenant, encrypted per line
 // ──────────────────────────────────────────────────────────────────────
 const getLogFilePath = (tenantId: string, date: Date = new Date()): string => {
   const year = date.getFullYear();
@@ -105,9 +134,6 @@ const getLogFilePath = (tenantId: string, date: Date = new Date()): string => {
   return path.join(monthDir, `${day}.jsonl`);
 };
 
-/**
- * Append a **single** log entry (JSON line)
- */
 export const appendLog = async (tenantId: string, entry: any): Promise<void> => {
   const file = getLogFilePath(tenantId);
   const line = JSON.stringify({
@@ -115,19 +141,13 @@ export const appendLog = async (tenantId: string, entry: any): Promise<void> => 
     ...entry,
   }) + '\n';
 
-  // Encrypt per line (optional: encrypt whole file)
   const encryptedLine = encrypt(line);
-
   await fsPromises.appendFile(file, encryptedLine + '\n');
   logger.event(`Log appended → ${file}`);
 };
 
-/**
- * Load **all** logs for a tenant (decrypts line-by-line)
- */
 export const loadLogs = async (tenantId: string): Promise<any[]> => {
-  const tenantDir = getTenantDir(tenantId);
-  const logsDir = path.join(tenantDir, 'logs');
+  const logsDir = path.join(getTenantDir(tenantId), 'logs');
   if (!fs.existsSync(logsDir)) return [];
 
   const months = await fsPromises.readdir(logsDir);
@@ -156,9 +176,9 @@ export const loadLogs = async (tenantId: string): Promise<any[]> => {
   return all.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 };
 
-/**
- * Get all tenant IDs
- */
+// ──────────────────────────────────────────────────────────────────────
+//  TENANTS
+// ──────────────────────────────────────────────────────────────────────
 export const getAllTenants = async (): Promise<string[]> => {
   if (!fs.existsSync(DATA_ROOT)) return [];
   const entries = await fsPromises.readdir(DATA_ROOT);
@@ -175,12 +195,16 @@ export const getAllTenants = async (): Promise<string[]> => {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-//  EXPORT
+//  EXPORT (ONLY PER-CHAIN + LOGS)
 // ──────────────────────────────────────────────────────────────────────
 export default {
-  saveConfig,
-  loadConfig,
+  saveChainConfig,
+  loadChainConfig,
+  getChainIdsForTenant,
+
   appendLog,
   loadLogs,
+
   getAllTenants,
+  getTenantDir,
 };

@@ -27,69 +27,63 @@
  * @description Filters `balances.Transfer` events, logs relevant data, and formats messages
  *              for notification dispatch. Supports both incoming and outgoing transfers.
  */
+// SPDX-License-Identifier: MIT
+// plugins/activities/transfers.ts
 
 import { ActivityPlugin } from '../../types/pluginTypes';
 
 const transfers: ActivityPlugin = {
   name: 'transfers',
 
-  /**
-   * @function filter
-   * @description Determines if the event is a `balances.Transfer` involving the tenant's address.
-   * @param record - Blockchain event record
-   * @param address - Tenant's Polkadot address
-   * @returns Boolean indicating whether the event is relevant
-   */
-  async filter(record: any, address: string): Promise<boolean> {
-    const event = record.event;
-    if (!event || event.section !== 'balances') return false;
-    if (event.method !== 'Transfer') return false;
+  /** --------------------------------------------------------------
+   *  FILTER – does this transfer involve the tenant?
+   *  -------------------------------------------------------------- */
+  filter(
+    record: any,
+    address: string,
+    _chainId: string,
+  ): boolean {
+    const ev = record.event;
+    if (!ev || ev.section !== 'balances' || ev.method !== 'Transfer') return false;
 
-    const data = event.data.toJSON();
-    const from = data[0] || data.from;
-    const to = data[1] || data.to;
-
+    const [from, to] = ev.data.toJSON(); // balances.Transfer → [from, to, amount]
     return from === address || to === address;
   },
 
-  /**
-   * @function log
-   * @description Extracts structured log data from a transfer event.
-   * @param record - Blockchain event record
-   * @param address - Tenant's Polkadot address
-   * @returns Log entry object with metadata
-   */
-  async log(record: any, address: string): Promise<any> {
-    const event = record.event;
-    const data = event.data.toJSON();
-    const from = data[0] || data.from;
-    const to = data[1] || data.to;
-    const amount = data[2] || data.amount;
+  /** --------------------------------------------------------------
+   *  LOG – build a rich log entry
+   *  -------------------------------------------------------------- */
+  log(
+    record: any,
+    address: string,
+    chainId: string,
+    tokenSymbol: string
+  ): any {
+    const ev = record.event;
+    const [from, to, amount] = ev.data.toJSON();
 
     return {
       timestamp: new Date().toISOString(),
       type: 'transfer',
+      chain: chainId,
+      token: tokenSymbol,
       from,
       to,
-      amount,
-      blockNumber: record.phase?.asApplyExtrinsic || 'unknown',
+      amount,                     // planck
       direction: from === address ? 'outgoing' : 'incoming',
+      blockNumber: record.blockNumber?.toNumber() ?? 'unknown',
     };
   },
 
-  /**
-   * @function formatMessage
-   * @description Converts a log entry into a human-readable transfer message.
-   * @param logEntry - Structured log data
-   * @param address - Tenant's Polkadot address
-   * @returns Formatted message string
-   */
-  async formatMessage(logEntry: any): Promise<string> {
-    const direction = logEntry.direction;
-    const other = direction === 'outgoing' ? logEntry.to : logEntry.from;
-    const amountFormatted = (logEntry.amount / 1e12).toFixed(4); // Convert planck to WND
+  /** --------------------------------------------------------------
+   *  MESSAGE – human readable notification
+   *  -------------------------------------------------------------- */
+  formatMessage(logEntry: any): string {
+    const { direction, amount, token, from, to } = logEntry;
+    const other = direction === 'outgoing' ? to : from;
+    const amountFmt = (amount / 1e12).toFixed(4); // planck → token
 
-    return `${direction.toUpperCase()} Transfer: ${amountFormatted} WND ${direction === 'outgoing' ? 'to' : 'from'} ${other.substring(0, 10)}...`;
+    return `${direction.toUpperCase()} Transfer: ${amountFmt} ${token} ${direction === 'outgoing' ? 'to' : 'from'} ${other}...`;
   },
 };
 

@@ -35,65 +35,90 @@ import storage from './utils/storage';
 import workerpool from 'workerpool';
 import os from 'os';
 import logger from './utils/logger';
-import { plugins } from './utils/pluginRegistry';
-
-process.on('message', (msg: any) => {
-  if (msg?.type === 'plugin-init') {
-    Object.assign(plugins, JSON.parse(msg.payload));
-    logger.info(`Worker ${process.pid} initialized plugins from master`);
-  }
-});
+import { ChainConfig } from './config';
+import { startReferendumCacheCleanup } from './plugins/activities/governance';
+import { startValidatorCacheCleanup } from './plugins/activities/staking';
 
 const numCores = os.cpus().length;
-const pool = workerpool.pool(__dirname + '/utils/pluginWorker.ts', {
-  maxWorkers: numCores
-});
-
-const port = config.port;
-app.listen(port, () => {
-  logger.info(`Worker ${process.pid} running on port ${port}`);
-});
-
-process.on('message', (msg: any) => {
-  if (msg?.type === 'start-monitoring') {
-    logger.event(`Worker ${process.pid} received start-monitoring signal`);
-    startMonitoring();
-  }
-});
+const pool = workerpool.pool(__dirname + '/utils/pluginWorker.ts', { maxWorkers: numCores });
 
 let isMonitoring = false;
 
-async function startMonitoring() {
+const port = config.port;
+app.listen(port, () => {
+  logger.info(`Worker ${process.pid} listening on port ${port}`);
+});
+
+process.on('message', (msg: any) => {
+  if (msg?.type === 'start-monitoring' && msg?.payload) {
+    const chain: ChainConfig = JSON.parse(msg.payload);
+    if (!isMonitoring) {
+      startMonitoring(chain);
+    }
+  }
+});
+
+async function startMonitoring(chain: ChainConfig) {
   if (isMonitoring) return;
   isMonitoring = true;
 
-  try {
-    logger.event(`Worker ${process.pid} initiating Polkadot event monitoring...`);
-    const api = await getApi();
-    if (!api) throw new Error('Failed to connect to Polkadot API');
+  startReferendumCacheCleanup();
+  startValidatorCacheCleanup();
 
-    api.query.system.events(async (events: any[]) => {
-      logger.event(`Worker ${process.pid} received ${events.length} system events`);
+  try {
+    logger.event(`Worker ${process.pid} monitoring ${chain.name} (${chain.tokenSymbol})`);
+
+    const api = await getApi(chain.name, chain.rpcUrls);
+    if (!api) throw new Error('API connection failed');
+
+    await api.query.system.events(async (events: any[]) => {
+      if (events.length === 0) return;
+
+      logger.event(`Worker ${process.pid} → ${chain.name}: ${events.length} events`);
+
+      // ──────────────────────────────────────────────────────────────────
+      // 1. Get all tenants
+      // ──────────────────────────────────────────────────────────────────
       const tenantIds = await storage.getAllTenants();
 
+      // ──────────────────────────────────────────────────────────────────
+      // 2. Load per-chain config for each tenant
+      // ──────────────────────────────────────────────────────────────────
       const tenantConfigs = await Promise.all(
         tenantIds.map(async (tenantId) => {
-          const config = await storage.loadConfig(tenantId);
-          return config ? { tenantId, config } : null;
+          const cfg = await storage.loadChainConfig(tenantId, chain.name);
+          return cfg ? { tenantId, config: cfg } : null;
         })
       );
 
+      const validTenants = tenantConfigs.filter(Boolean) as Array<{
+        tenantId: string;
+        config: any;
+      }>;
+
+      if (validTenants.length === 0) {
+        logger.info(`No tenants configured for chain ${chain.name}`);
+        return;
+      }
+
+      logger.event(`Processing ${validTenants.length} tenant(s) on ${chain.name}`);
+
+      // ──────────────────────────────────────────────────────────────────
+      // 3. Dispatch plugin tasks
+      // ──────────────────────────────────────────────────────────────────
       const tasks: Promise<any>[] = [];
 
       for (const record of events) {
-        for (const tenant of tenantConfigs.filter(Boolean)) {
+        for (const tenant of validTenants) {
           tasks.push(
             pool.exec('processPluginTask', [
               {
                 record,
-                tenantId: tenant!.tenantId,
-                config: tenant!.config
-              }
+                tenantId: tenant.tenantId,
+                config: tenant.config,
+                chainId: chain.name,
+                tokenSymbol: chain.tokenSymbol,
+              },
             ])
           );
         }
@@ -101,10 +126,8 @@ async function startMonitoring() {
 
       await Promise.allSettled(tasks);
     });
-
-    logger.event(`Worker ${process.pid} completed plugin dispatch for current event batch`);
-  } catch (error) {
-    logger.error(`Failed to start monitoring: ${error}`);
+  } catch (err: any) {
+    logger.error(`Monitoring failed on ${chain.name}: ${err.message}`);
     isMonitoring = false;
   }
 }

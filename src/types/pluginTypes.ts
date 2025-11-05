@@ -34,32 +34,37 @@
  * @description Interface for plugins that filter and process blockchain activity events.
  */
 export interface ActivityPlugin {
-  // Unique name of the plugin
   name: string;
 
   /**
    * @function filter
-   * @description Determines whether a given event record is relevant to the specified address.
    * @param record - Blockchain event record
    * @param address - Tenant's Polkadot address
-   * @returns Boolean or Promise<boolean> indicating match
+   * @param chainId - Name of the chain (westend, asset-hub-westend, …)
    */
-  filter(record: any, address: string): Promise<boolean> | boolean;
+  filter(
+    record: any,
+    address: string,
+    chainId: string,
+  ): Promise<boolean> | boolean;
 
   /**
    * @function log
-   * @description Extracts and formats log data from a matching event.
    * @param record - Blockchain event record
    * @param address - Tenant's Polkadot address
-   * @returns Structured log entry
+   * @param chainId - Name of the chain
+   * @param tokenSymbol - Native token symbol
    */
-  log(record: any, address: string): Promise<any> | any;
+  log(
+    record: any,
+    address: string,
+    chainId: string,
+    tokenSymbol?: string
+  ): Promise<any> | any;
 
   /**
    * @function formatMessage
-   * @description Converts a log entry into a human-readable message for notifications.
-   * @param logEntry - Structured log data
-   * @returns Notification message string
+   * @param logEntry - Structured log data (already contains chainId & tokenSymbol)
    */
   formatMessage(logEntry: any): Promise<string> | string;
 }

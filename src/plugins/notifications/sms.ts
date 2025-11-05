@@ -22,7 +22,7 @@
 // SOFTWARE.
 
 /**
- * @file plugins/activities/sms.ts
+ * @file plugins/notifications/sms.ts
  * @summary Notification plugin for sending SMS messages via Twilio.
  * @description Implements the NotificationPlugin interface to deliver messages
  *              to a configured phone number using Twilio's messaging API.

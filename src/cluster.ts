@@ -28,47 +28,37 @@
  *              across available CPU cores. One designated worker is assigned to start
  *              blockchain event monitoring via Polkadot API (PAPI), the rest serve requests.
  */
-
+// cluster.ts
 import cluster from 'cluster';
 import os from 'os';
 import logger from './utils/logger';
-
 import { loadPlugins, plugins } from './utils/pluginRegistry';
+import { CHAINS } from './config';
 
 loadPlugins();
-const serializedPlugins = JSON.stringify(plugins);
 
-for (const id in cluster.workers) {
-  cluster.workers[id]?.send({ type: 'plugin-init', payload: serializedPlugins });
-}
-
-// Determine the number of logical CPU cores available for clustering.
 const numCPUs = os.cpus().length;
 
 if (cluster.isPrimary) {
-  // Log the PID of the primary (master) process.
-  logger.info(`Primary process ${process.pid} is running with ${numCPUs} workers`);
+  logger.info(`Primary ${process.pid} with ${numCPUs} cores`);
 
-  // Fork a worker process for each CPU core.
-  for (let i = 0; i < numCPUs; i++) {
-    const worker = cluster.fork();
-    logger.info(`Forked worker ${worker.process.pid}`);
+  const numRest = Math.max(1, numCPUs - CHAINS.length);
+  logger.info(`Forking ${numRest} REST workers`);
+  for (let i = 0; i < numRest; i++) cluster.fork();
 
-    // Designate the first worker to initiate blockchain event monitoring.
-    if (i === 0) {
-      logger.event(`Worker ${worker.process.pid} assigned to start monitoring`);
-      worker.send({ type: 'start-monitoring' });
+  logger.info(`Forking ${CHAINS.length} monitoring workers`);
+  CHAINS.forEach(() => cluster.fork());
+
+  cluster.on('exit', () => cluster.fork());
+
+  cluster.on('online', (worker) => {
+    const freeChain = CHAINS.find(c => !c.assignedWorkerId);
+    if (freeChain) {
+      freeChain.assignedWorkerId = worker.id;
+      worker.send({ type: 'start-monitoring', payload: JSON.stringify(freeChain) });
+      logger.event(`Assigned worker ${worker.process.pid} → ${freeChain.name}`);
     }
-  }
-
-  // Handle worker exit events and automatically restart failed workers.
-  cluster.on('exit', (worker, code, signal) => {
-    logger.error(`Worker ${worker.process.pid} exited with code ${code} and signal ${signal}`);
-    const newWorker = cluster.fork();
-    logger.info(`Restarted worker ${newWorker.process.pid}`);
   });
 } else {
-  // Load the Express server and plugin engine in each worker process.
-  logger.info(`Worker ${process.pid} initializing server`);
   require('./server');
 }

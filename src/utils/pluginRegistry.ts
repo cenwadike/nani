@@ -5,7 +5,7 @@
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including but not limited to the rights
+// in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
@@ -33,7 +33,6 @@ import path from 'path';
 import logger from './logger';
 import { ActivityPlugin, NotificationPlugin, StatsPlugin } from '../types/pluginTypes';
 
-// Central plugin registry object, categorized by plugin type
 const plugins: {
   activities: { [name: string]: ActivityPlugin };
   notifications: { [name: string]: NotificationPlugin };
@@ -44,68 +43,170 @@ const plugins: {
   stats: {},
 };
 
-/**
- * @function loadPlugins
- * @description Loads all plugins from the `plugins` directory into memory.
- *              Supports three plugin types: activities, notifications, and stats.
- *              Each plugin must export a default object conforming to its respective interface.
- */
-function loadPlugins(): void {
+// Singleton flag to prevent duplicate loading
+let pluginsLoaded = false;
+
+export function loadPlugins(): void {
+  // Skip if already loaded
+  if (pluginsLoaded) {
+    logger.info('Plugins already loaded, skipping...');
+    return;
+  }
+
   const pluginDir = path.join(__dirname, '../plugins');
   logger.info(`Scanning plugin directory: ${pluginDir}`);
 
   ['activities', 'notifications', 'stats'].forEach((type) => {
     const typeDir = path.join(pluginDir, type);
     if (!fs.existsSync(typeDir)) {
-      logger.error(`Plugin type directory not found: ${typeDir}`);
+      logger.warn(`Plugin type directory not found: ${typeDir}`);
       return;
     }
 
-    const files = fs.readdirSync(typeDir).filter((f) => f.endsWith('.ts') || f.endsWith('.js'));
+    const files = fs.readdirSync(typeDir).filter(f => f.endsWith('.ts') || f.endsWith('.js'));
     logger.info(`Found ${files.length} ${type} plugin files`);
 
     files.forEach((file) => {
       const pluginPath = path.join(typeDir, file);
-      const pluginName = path.basename(file, path.extname(file));
-
       try {
-        const plugin = require(pluginPath).default;
+        // Clear require cache to ensure fresh load
+        delete require.cache[require.resolve(pluginPath)];
+        
+        const pluginModule = require(pluginPath);
+        const plugin = pluginModule.default || pluginModule;
+
+        if (!plugin || typeof plugin !== 'object') {
+          logger.error(`Invalid plugin export in ${file}`);
+          return;
+        }
+
+        const pluginName = plugin.name;
+        if (!pluginName || typeof pluginName !== 'string') {
+          logger.error(`Plugin in ${file} missing .name`);
+          return;
+        }
+
+        // Validate plugin structure based on type
+        if (type === 'notifications') {
+          const notifPlugin = plugin as NotificationPlugin;
+          
+          // Check required methods
+          if (typeof notifPlugin.init !== 'function') {
+            logger.error(`Notification plugin ${pluginName} missing init() method`);
+            return;
+          }
+          if (typeof notifPlugin.execute !== 'function') {
+            logger.error(`Notification plugin ${pluginName} missing execute() method`);
+            return;
+          }
+          if (typeof notifPlugin.validateConfig !== 'function') {
+            logger.error(`Notification plugin ${pluginName} missing validateConfig() method`);
+            return;
+          }
+
+          // Initialize notification plugins
+          try {
+            notifPlugin.init();
+            logger.info(`Initialized notification plugin: ${pluginName}`);
+          } catch (err: any) {
+            logger.error(`Failed to init ${pluginName}: ${err.message}`);
+            return;
+          }
+        } else if (type === 'activities') {
+          const actPlugin = plugin as ActivityPlugin;
+          
+          // Check required methods
+          if (typeof actPlugin.filter !== 'function') {
+            logger.error(`Activity plugin ${pluginName} missing filter() method`);
+            return;
+          }
+          if (typeof actPlugin.log !== 'function') {
+            logger.error(`Activity plugin ${pluginName} missing log() method`);
+            return;
+          }
+          if (typeof actPlugin.formatMessage !== 'function') {
+            logger.error(`Activity plugin ${pluginName} missing formatMessage() method`);
+            return;
+          }
+        } else if (type === 'stats') {
+          const statsPlugin = plugin as StatsPlugin;
+          
+          // Check required methods
+          if (typeof statsPlugin.compute !== 'function') {
+            logger.error(`Stats plugin ${pluginName} missing compute() method`);
+            return;
+          }
+        }
+
+        // Store by .name
         plugins[type as keyof typeof plugins][pluginName] = plugin;
+
         logger.event(`Loaded ${type} plugin: ${pluginName}`);
-      } catch (error: any) {
-        logger.error(`Failed to load plugin ${file}: ${error.message}`);
+      } catch (err: any) {
+        logger.error(`Failed to load plugin ${file}: ${err.message}`);
+        logger.error(`Stack trace: ${err.stack}`);
       }
     });
   });
 
+  pluginsLoaded = true;
   logger.info('Plugin registry initialized');
+  logger.info(`Loaded plugins: ${JSON.stringify({
+    activities: Object.keys(plugins.activities),
+    notifications: Object.keys(plugins.notifications),
+    stats: Object.keys(plugins.stats)
+  })}`);
 }
 
 /**
- * @function getPlugin
- * @description Retrieves a specific plugin by type and name.
- * @param type - Plugin category: 'activities', 'notifications', or 'stats'
- * @param name - Plugin name (filename without extension)
- * @returns The plugin instance or undefined if not found
+ * Ensures plugins are loaded before accessing them
+ * Call this in contexts where plugins might not be loaded yet
  */
-function getPlugin(type: keyof typeof plugins, name: string) {
-  const plugin = plugins[type]?.[name];
+export function ensurePluginsLoaded(): void {
+  if (!pluginsLoaded) {
+    loadPlugins();
+  }
+}
+
+/**
+ * Check if plugins have been loaded
+ */
+export function arePluginsLoaded(): boolean {
+  return pluginsLoaded;
+}
+
+/**
+ * Force reload all plugins (useful for testing or hot-reload scenarios)
+ */
+export function reloadPlugins(): void {
+  pluginsLoaded = false;
+  // Clear the plugins object
+  Object.keys(plugins.activities).forEach(k => delete plugins.activities[k]);
+  Object.keys(plugins.notifications).forEach(k => delete plugins.notifications[k]);
+  Object.keys(plugins.stats).forEach(k => delete plugins.stats[k]);
+  
+  loadPlugins();
+}
+
+export function getPlugin(
+  type: 'activities' | 'notifications' | 'stats',
+  name: string
+): ActivityPlugin | NotificationPlugin | StatsPlugin | undefined {
+  // Ensure plugins are loaded before accessing
+  ensurePluginsLoaded();
+  
+  const plugin = plugins[type][name];
   if (!plugin) {
-    logger.error(`Plugin not found: type=${type}, name=${name}`);
+    logger.warn(`Plugin not found: ${type}/${name}. Available: ${Object.keys(plugins[type]).join(', ')}`);
   }
   return plugin;
 }
 
-/**
- * @function getPlugins
- * @description Retrieves all plugins of a given type.
- * @param type - Plugin category: 'activities', 'notifications', or 'stats'
- * @returns A dictionary of plugins keyed by name
- */
-function getPlugins(type: keyof typeof plugins) {
-  const all = plugins[type] || {};
-  logger.info(`Retrieved ${Object.keys(all).length} plugins of type ${type}`);
-  return all;
+export function getPlugins(type: 'activities' | 'notifications' | 'stats') {
+  // Ensure plugins are loaded before accessing
+  ensurePluginsLoaded();
+  
+  return plugins[type] || {};
 }
 
-export { loadPlugins, getPlugin, getPlugins, plugins };
+export { plugins };

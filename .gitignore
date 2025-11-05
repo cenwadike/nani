@@ -17,3 +17,4 @@ data/
 *.sqlite
 *.sqlite3
 *.db
+nani-*

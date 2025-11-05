@@ -27,104 +27,83 @@
  * @description Establishes and maintains a resilient WebSocket connection to the Polkadot blockchain
  *              using PAPI. Includes automatic reconnection logic and shared API access.
  */
-
+// utils/papi.ts
 import { ApiPromise, WsProvider } from '@polkadot/api';
-import config from '../config';
 import logger from './logger';
 
-// Cached API instance shared across the application
-let api: ApiPromise | null = null;
+// Global cache: chainName → { api, url, reconnectAttempts }
+const chainCache = new Map<string, {
+  api: ApiPromise;
+  url: string;
+  reconnectAttempts: number;
+}>();
 
-// Flag to prevent concurrent connection attempts
-let isConnecting = false;
-
-// Tracks exponential backoff attempts for reconnection
-let reconnectAttempts = 0;
-
-// Maximum delay between reconnection attempts (in milliseconds)
 const MAX_RECONNECT_DELAY = 30000;
 
-// List of fallback endpoints (primary first)
-const endpoints = [config.papiWs, ...(config.backupPapiWs || [])];
-
 /**
- * @function connect
- * @description Attempts to connect to the Polkadot API using available endpoints.
- *              Tries each endpoint in order until successful.
- * @returns {ApiPromise} Connected API instance
+ * Connect to a specific chain using its RPC URLs
  */
-async function connect(): Promise<ApiPromise> {
-  if (api && api.isConnected) {
-    logger.info('Polkadot API already connected');
-    return api;
+async function connectChain(chainName: string, rpcUrls: string[]): Promise<ApiPromise> {
+  const cached = chainCache.get(chainName);
+  if (cached?.api?.isConnected) {
+    logger.info(`Using cached API for ${chainName}`);
+    return cached.api;
   }
 
-  if (isConnecting) {
-    logger.info('Waiting for existing Polkadot API connection attempt');
-    while (isConnecting) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    return api!;
-  }
-
-  isConnecting = true;
-
-  for (const endpoint of endpoints) {
+  for (const url of rpcUrls) {
     try {
-      logger.event(`Attempting connection to Polkadot API at ${endpoint}`);
-      const provider = new WsProvider(endpoint);
-      api = await ApiPromise.create({ provider });
+      logger.event(`Connecting to ${chainName} at ${url}`);
+      const provider = new WsProvider(url, 5000, {}, 60_000);
+      const api = await ApiPromise.create({ provider });
+      await api.isReady;
 
-      logger.info(`Connected to Polkadot API at ${endpoint}`);
-      reconnectAttempts = 0;
-      isConnecting = false;
+      const entry = { api, url, reconnectAttempts: 0 };
+      chainCache.set(chainName, entry);
 
-      api.on('disconnected', () => {
-        logger.error(`Disconnected from ${endpoint}, attempting reconnect...`);
-        reconnect();
+      provider.on('disconnected', () => {
+        logger.warn(`Disconnected from ${url}. Reconnecting...`);
+        chainCache.delete(chainName);
+        reconnectChain(chainName, rpcUrls);
       });
 
+      logger.info(`Connected to ${chainName} at ${url}`);
       return api;
-    } catch (error: any) {
-      logger.error(`Connection failed for ${endpoint}: ${error.message}`);
+    } catch (err: any) {
+      logger.error(`Failed ${url}: ${err.message}`);
     }
   }
 
-  isConnecting = false;
-  throw new Error('All Polkadot API endpoints failed');
+  throw new Error(`All endpoints failed for ${chainName}`);
 }
 
-/**
- * @function reconnect
- * @description Implements exponential backoff strategy to reconnect to PAPI.
- *              Retries indefinitely until a successful connection is established.
- */
-async function reconnect(): Promise<void> {
-  reconnectAttempts++;
-  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+async function reconnectChain(chainName: string, rpcUrls: string[]) {
+  const entry = chainCache.get(chainName);
+  const attempts = (entry?.reconnectAttempts || 0) + 1;
+  const delay = Math.min(1000 * Math.pow(2, attempts), MAX_RECONNECT_DELAY);
 
-  logger.event(`Reconnect attempt ${reconnectAttempts}, waiting ${delay}ms...`);
-  await new Promise((resolve) => setTimeout(resolve, delay));
+  logger.event(`Reconnect ${chainName} attempt ${attempts}, delay ${delay}ms`);
+  await new Promise(r => setTimeout(r, delay));
 
   try {
-    await connect();
-  } catch (error: any) {
-    logger.error(`Reconnect failed: ${error.message}`);
-    reconnect(); // Recursive retry
+    const api = await connectChain(chainName, rpcUrls);
+    chainCache.set(chainName, { api, url: '', reconnectAttempts: attempts });
+  } catch {
+    reconnectChain(chainName, rpcUrls);
   }
 }
 
 /**
- * @function getApi
- * @description Returns a connected Polkadot API instance, establishing a connection if needed.
- * @returns {ApiPromise} Connected API instance
+ * Overloaded getApi
+ * - getApi() → legacy single chain
+ * - getApi(chainName, rpcUrls) → multi-chain
  */
-async function getApi(): Promise<ApiPromise> {
-  if (!api || !api.isConnected) {
+async function getApi(chainName: string, rpcUrls: string[]): Promise<ApiPromise> {
+    if (!chainCache.has(chainName) || !chainCache.get(chainName)?.api.isConnected) {
     logger.info('Polkadot API not connected, initiating connection...');
-    await connect();
+    await connectChain(chainName, rpcUrls);
   }
-  return api!;
+  return chainCache.get(chainName)?.api!;
 }
 
-export { connect, getApi };
+
+export { getApi };

@@ -27,73 +27,107 @@
  */
 
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import logger from './utils/logger';
 
-// Load .env
 dotenv.config();
-logger.info('Environment variables loaded from .env');
 
-/**
- * Helper: safe integer parse
- */
 const int = (val: string | undefined, def: number): number =>
   val && !isNaN(parseInt(val, 10)) ? parseInt(val, 10) : def;
 
-/**
- * Helper: boolean parse
- */
 const bool = (val: string | undefined, def: boolean): boolean =>
   val === 'true' ? true : val === 'false' ? false : def;
 
-/**
- * Helper: non-empty string
- */
 const str = (val: string | undefined, def: string): string =>
   val && val.trim() ? val.trim() : def;
 
+export interface ChainConfig {
+  name: string;
+  rpcUrls: string[];
+  tokenSymbol: string;
+  assignedWorkerId?: number;
+}
+
 // ──────────────────────────────────────────────────────────────────────
-// Configuration Object
+// Load Chains: chains.json → .env fallback
 // ──────────────────────────────────────────────────────────────────────
+let CHAINS: ChainConfig[] = [];
 
-const config = {
-  // ── Server
-  port: int(process.env.PORT, 3000),
+try {
+  const chainsPath = path.join(process.cwd(), 'chains.json');
+  if (fs.existsSync(chainsPath)) {
+    const raw = fs.readFileSync(chainsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      CHAINS = parsed.map((c: any) => ({
+        name: c.name,
+        rpcUrls: Array.isArray(c.rpcUrls) ? c.rpcUrls : [],
+        tokenSymbol: c.tokenSymbol || 'DOT',
+      }));
+      logger.info(`Loaded ${CHAINS.length} chains from chains.json`);
+    }
+  }
+} catch (err) {
+  logger.warn(`Failed to load chains.json: ${err}`);
+}
 
-  // ── Auth
-  jwtSecret: str(process.env.JWT_SECRET, 'dev-secret-change-me'),
-
-  // ── Polkadot API
-  papiWs: str(process.env.PAPI_WS, 'wss://westend-rpc.polkadot.io'),
-  backupPapiWs: (process.env.BACKUP_PAPI_WS || '')
+// Fallback to .env
+if (CHAINS.length === 0) {
+  logger.info('No chains.json found. Using .env fallback');
+  const westendUrls = str(process.env.WESTEND_RPC_URLS, '')
     .split(',')
     .map(s => s.trim())
-    .filter(Boolean),
+    .filter(Boolean);
+  const assetHubUrls = str(process.env.ASSETHUB_RPC_URLS, '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 
-  // ── Encryption
-  encryptionKey: str(
-    process.env.ENCRYPTION_KEY,
-    'default-32-char-key-change-me!'
-  ),
+  if (westendUrls.length > 0) {
+    CHAINS.push({ name: 'westend', rpcUrls: westendUrls, tokenSymbol: 'WND' });
+  }
+  if (assetHubUrls.length > 0) {
+    CHAINS.push({ name: 'asset-hub-westend', rpcUrls: assetHubUrls, tokenSymbol: 'WND' });
+  }
+}
 
-  // ── Twilio
+// Validate
+if (CHAINS.length === 0) {
+  logger.error('No chains configured in chains.json or .env');
+  process.exit(1);
+}
+
+CHAINS.forEach(chain => {
+  if (chain.rpcUrls.length === 0) {
+    logger.error(`Chain ${chain.name} has no RPC URLs`);
+    process.exit(1);
+  }
+  logger.info(`Chain: ${chain.name} → ${chain.rpcUrls.length} endpoints, token: ${chain.tokenSymbol}`);
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// Rest of Config
+// ──────────────────────────────────────────────────────────────────────
+const config = {
+  port: int(process.env.PORT, 3000),
+  jwtSecret: str(process.env.JWT_SECRET, 'dev-secret-change-me'),
+  encryptionKey: Buffer.from(
+    str(process.env.ENCRYPTION_KEY, 'default-32-char-key-change-me!'),
+    'utf8'
+  ).toString('base64'),
   twilio: {
     sid: str(process.env.TWILIO_SID, ''),
     token: str(process.env.TWILIO_TOKEN, ''),
     from: str(process.env.TWILIO_FROM, ''),
   },
-
-  // ── Discord
   discord: {
     webhook: str(process.env.DISCORD_WEBHOOK, ''),
   },
-
-  // ── Rate Limiting
   rateLimit: {
     windowMs: 60 * 1000,
     max: 10,
   },
-
-  // ── SMTP (Fixed!)
   smtp: {
     host: str(process.env.SMTP_HOST, 'localhost'),
     port: int(process.env.SMTP_PORT, 587),
@@ -105,9 +139,8 @@ const config = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-// Validation & Logging
+// Validation
 // ──────────────────────────────────────────────────────────────────────
-
 const required = (key: string, value: any) => {
   if (!value) {
     logger.error(`Missing required config: ${key}`);
@@ -116,15 +149,14 @@ const required = (key: string, value: any) => {
 };
 
 required('JWT_SECRET', config.jwtSecret);
-required('ENCRYPTION_KEY', config.encryptionKey);
+required('ENCRYPTION_KEY', str(process.env.ENCRYPTION_KEY, ''));
 required('TWILIO_SID', config.twilio.sid);
 required('TWILIO_TOKEN', config.twilio.token);
 required('TWILIO_FROM', config.twilio.from);
 required('SMTP_USER', config.smtp.user);
 required('SMTP_PASS', config.smtp.pass);
 
-logger.info(
-  `Config loaded: port=${config.port}, papiWs=${config.papiWs}, backups=${config.backupPapiWs.length}`
-);
+logger.info(`Config loaded: ${CHAINS.length} chains, ${CHAINS.flatMap(c => c.rpcUrls).length} total endpoints`);
 
+export { CHAINS };
 export default config;

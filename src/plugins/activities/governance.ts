@@ -81,21 +81,11 @@ type GovernanceAction =
 // ============================================================================
 
 const SUPPORTED_METHODS = [
-  'Submitted',        // New referendum submitted
-  'DecisionDepositPlaced',  // Decision deposit placed
-  'Voted',           // Vote cast on referendum
-  'Approved',        // Referendum approved
-  'Rejected',        // Referendum rejected (Disapproved)
-  'Executed',        // Referendum executed
-  'Cancelled',       // Referendum cancelled
-  'Killed',          // Referendum killed
-  'TimedOut',        // Referendum timed out
-  'ConfirmStarted',  // Confirmation period started
-  'ConfirmAborted',  // Confirmation aborted
-  'Confirmed',       // Referendum confirmed
+  'Submitted', 'DecisionDepositPlaced', 'Voted', 'Approved', 'Rejected',
+  'Executed', 'Cancelled', 'Killed', 'TimedOut', 'ConfirmStarted',
+  'ConfirmAborted', 'Confirmed',
 ] as const;
 
-// Map of methods to user-friendly actions
 const METHOD_TO_ACTION: Record<string, GovernanceAction> = {
   'Submitted': 'submitted',
   'DecisionDepositPlaced': 'proposed',
@@ -113,7 +103,7 @@ const METHOD_TO_ACTION: Record<string, GovernanceAction> = {
 const REFERENDUM_CACHE_TTL = 600000; // 10 minutes
 
 // ============================================================================
-// Cache
+// Cache & Interval Management
 // ============================================================================
 
 interface CachedReferendum {
@@ -123,9 +113,6 @@ interface CachedReferendum {
 
 const referendumCache = new Map<string, CachedReferendum>();
 
-/**
- * Cleans expired referendum cache entries
- */
 function cleanReferendumCache(): void {
   const now = Date.now();
   for (const [key, value] of referendumCache.entries()) {
@@ -135,59 +122,47 @@ function cleanReferendumCache(): void {
   }
 }
 
-// Clean cache periodically
-setInterval(cleanReferendumCache, REFERENDUM_CACHE_TTL);
+// ──────────────────────────────────────────────────────────────────────
+// Start / Stop API for testing
+// ──────────────────────────────────────────────────────────────────────
+let referendumCleanupInterval: NodeJS.Timeout | null = null;
+
+export function startReferendumCacheCleanup(): void {
+  if (referendumCleanupInterval) return;
+  referendumCleanupInterval = setInterval(cleanReferendumCache, REFERENDUM_CACHE_TTL);
+}
+
+export function stopReferendumCacheCleanup(): void {
+  if (referendumCleanupInterval) {
+    clearInterval(referendumCleanupInterval);
+    referendumCleanupInterval = null;
+  }
+}
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
-/**
- * Checks if a value is a valid address
- * @param value - Value to check
- * @returns True if value looks like a Polkadot address
- */
 function isAddress(value: any): boolean {
   if (typeof value !== 'string') return false;
-  // Polkadot addresses typically start with 1, 5, or other network-specific prefixes
   return value.length >= 47 && value.length <= 48;
 }
 
-/**
- * Recursively searches event data for an address
- * @param data - Event data to search
- * @param address - Target address
- * @returns True if address is found
- */
 function findAddressInData(data: any, address: string): boolean {
   if (data === address) return true;
-  
-  if (Array.isArray(data)) {
-    return data.some(item => findAddressInData(item, address));
-  }
-  
+  if (Array.isArray(data)) return data.some(item => findAddressInData(item, address));
   if (typeof data === 'object' && data !== null) {
     return Object.values(data).some(value => findAddressInData(value, address));
   }
-  
   return false;
 }
 
-/**
- * Extracts vote data from event data
- * @param eventData - Raw event data
- * @param method - Event method name
- * @returns Parsed vote data or undefined
- */
 function extractVoteData(eventData: any[], method: string): VoteData | undefined {
   if (method !== 'Voted' || eventData.length < 3) return undefined;
 
   try {
     const voteField = eventData[2];
-    
-    // Vote can be in different formats depending on the runtime
     if (typeof voteField === 'object' && voteField !== null) {
-      // Standard vote format: { aye: boolean, conviction: number }
       if ('aye' in voteField || 'Aye' in voteField) {
         return {
           aye: voteField.aye || voteField.Aye || false,
@@ -195,127 +170,65 @@ function extractVoteData(eventData: any[], method: string): VoteData | undefined
           balance: eventData[3] || voteField.balance || voteField.Balance,
         };
       }
-      
-      // Split vote format
       if ('Split' in voteField) {
-        return {
-          aye: true, // Split votes are complex, simplify to "aye"
-          balance: voteField.Split?.aye || voteField.Split?.Aye,
-        };
+        return { aye: true, balance: voteField.Split?.aye || voteField.Split?.Aye };
       }
     }
-    
-    // Boolean vote
     if (typeof voteField === 'boolean') {
-      return {
-        aye: voteField,
-        balance: eventData[3],
-      };
+      return { aye: voteField, balance: eventData[3] };
     }
   } catch (err) {
     logger.warn(`Failed to extract vote data: ${err instanceof Error ? err.message : err}`);
   }
-  
   return undefined;
 }
 
-/**
- * Fetches referendum information from chain
- * @param api - Polkadot API instance
- * @param referendumId - Referendum ID
- * @returns Referendum info
- */
 async function getReferendumInfo(
   api: ApiPromise,
   referendumId: string | number
 ): Promise<ReferendumInfo> {
-  // Check cache first
   const cacheKey = String(referendumId);
   const cached = referendumCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < REFERENDUM_CACHE_TTL) {
     return cached.info;
   }
 
-  const info: ReferendumInfo = {
-    id: referendumId,
-  };
+  const info: ReferendumInfo = { id: referendumId };
 
   try {
-    // Try to fetch referendum info from chain
     const refInfo = await api.query.referenda?.referendumInfoFor(referendumId);
-    
     if (refInfo && (refInfo as any).isSome) {
       const refData = refInfo.toJSON() as any;
-      
-      // Extract track (origin)
-      if (refData?.ongoing?.track !== undefined) {
-        info.track = refData.ongoing.track;
-      } else if (refData?.Ongoing?.track !== undefined) {
-        info.track = refData.Ongoing.track;
-      }
-      
-      // Extract status
-      if (refData?.ongoing) {
-        info.status = 'ongoing';
-      } else if (refData?.approved) {
-        info.status = 'approved';
-      } else if (refData?.rejected) {
-        info.status = 'rejected';
-      } else if (refData?.cancelled) {
-        info.status = 'cancelled';
-      }
+      if (refData?.ongoing?.track !== undefined) info.track = refData.ongoing.track;
+      else if (refData?.Ongoing?.track !== undefined) info.track = refData.Ongoing.track;
+
+      if (refData?.ongoing) info.status = 'ongoing';
+      else if (refData?.approved) info.status = 'approved';
+      else if (refData?.rejected) info.status = 'rejected';
+      else if (refData?.cancelled) info.status = 'cancelled';
     }
   } catch (err) {
     logger.info(`Could not fetch referendum info for #${referendumId}: ${err instanceof Error ? err.message : err}`);
   }
 
-  // Cache the result
-  referendumCache.set(cacheKey, {
-    info,
-    timestamp: Date.now(),
-  });
-
+  referendumCache.set(cacheKey, { info, timestamp: Date.now() });
   return info;
 }
 
-/**
- * Gets track name from track ID
- * @param trackId - Track ID number
- * @returns Human-readable track name
- */
 function getTrackName(trackId: string | number | undefined): string {
   if (trackId === undefined) return '';
-  
   const trackMap: Record<number, string> = {
-    0: 'Root',
-    1: 'Whitelisted Caller',
-    10: 'Staking Admin',
-    11: 'Treasurer',
-    12: 'Lease Admin',
-    13: 'Fellowship Admin',
-    14: 'General Admin',
-    15: 'Auction Admin',
-    20: 'Referendum Canceller',
-    21: 'Referendum Killer',
-    30: 'Small Tipper',
-    31: 'Big Tipper',
-    32: 'Small Spender',
-    33: 'Medium Spender',
-    34: 'Big Spender',
+    0: 'Root', 1: 'Whitelisted Caller', 10: 'Staking Admin', 11: 'Treasurer',
+    12: 'Lease Admin', 13: 'Fellowship Admin', 14: 'General Admin', 15: 'Auction Admin',
+    20: 'Referendum Canceller', 21: 'Referendum Killer', 30: 'Small Tipper',
+    31: 'Big Tipper', 32: 'Small Spender', 33: 'Medium Spender', 34: 'Big Spender',
   };
-  
-  const trackNum = typeof trackId === 'number' ? trackId : Number(trackId);
-  return trackMap[trackNum] || `Track ${trackId}`;
+  const num = typeof trackId === 'number' ? trackId : Number(trackId);
+  return trackMap[num] || `Track ${trackId}`;
 }
 
-/**
- * Formats balance for display
- * @param balance - Balance in planck
- * @returns Formatted DOT amount
- */
 function formatBalance(balance: string | number | undefined): string {
   if (!balance) return '';
-  
   try {
     const planck = typeof balance === 'string' ? BigInt(balance) : BigInt(balance);
     const dot = Number(planck) / 1e12;
@@ -332,106 +245,52 @@ function formatBalance(balance: string | number | undefined): string {
 const governance: ActivityPlugin = {
   name: 'governance',
 
-  /**
-   * Filters blockchain events for relevant governance activities
-   * @param record - Blockchain event record
-   * @param address - Tenant's Polkadot address
-   * @returns True if event is relevant to the address
-   */
-  async filter(record: any, address: string): Promise<boolean> {
+  filter(record: any, address: string, chainId: string): boolean {
     try {
-      // Validate record structure
       const event = record?.event;
-      if (!event || event.section !== 'referenda') {
-        return false;
-      }
-
-      const { method, data } = event;
-
-      // Only process supported governance events
-      if (!SUPPORTED_METHODS.includes(method as any)) {
-        return false;
-      }
-
-      // Extract event data
-      const eventData = data.toJSON();
-      
-      // Validate data structure
-      if (!Array.isArray(eventData) || eventData.length === 0) {
-        logger.warn(`Invalid event data structure for referenda.${method}`);
-        return false;
-      }
-
-      // Check if address is involved in the event
-      const involvesAddress = findAddressInData(eventData, address);
-
-      if (involvesAddress) {
-        logger.event(`Governance event matched: ${method} for ${address}`);
-      }
-
-      return involvesAddress;
-    } catch (err) {
-      logger.error(`Error in governance filter: ${err instanceof Error ? err.message : err}`);
+      if (!event || event.section !== 'referenda') return false;
+      if (!SUPPORTED_METHODS.includes(event.method as any)) return false;
+      return findAddressInData(event.data.toJSON(), address);
+    } catch {
       return false;
     }
   },
 
-  /**
-   * Enriches a matching event with referendum details
-   * @param record - Blockchain event record
-   * @param address - Tenant's Polkadot address
-   * @returns Enriched log entry with referendum data
-   */
-  async log(record: any, address: string): Promise<GovernanceLogEntry | null> {
+  async log(
+    record: any,
+    address: string,
+    chainId: string,
+    tokenSymbol: string
+  ): Promise<GovernanceLogEntry | null> {
     try {
-      // Validate record
       const event = record?.event;
-      if (!event) {
-        logger.error('Invalid record: missing event');
-        return null;
-      }
+      if (!event) return null;
 
       const { method, data } = event;
       const eventData = data.toJSON();
+      if (!Array.isArray(eventData)) return null;
 
-      // Validate event data structure
-      if (!Array.isArray(eventData) || eventData.length === 0) {
-        logger.error('Invalid event data structure in log function');
-        return null;
-      }
-
-      // Extract block information
-      const blockHash = record.blockHash?.toHex() || '';
+      const referendumId = eventData[0] ?? 'unknown';
+      const action = METHOD_TO_ACTION[method] || method.toLowerCase();
       const blockNumber = record.blockNumber?.toNumber() || 0;
-      
-      // Extract extrinsic index if available
+      const blockHash = record.blockHash?.toHex() || '';
       let extrinsicIndex: number | undefined;
       if (record.phase?.isApplyExtrinsic) {
         extrinsicIndex = record.phase.asApplyExtrinsic.toNumber();
       }
 
-      // Extract referendum ID (usually first field)
-      const referendumId = eventData[0] !== undefined ? eventData[0] : 'unknown';
-
-      // Determine action from method
-      const action = METHOD_TO_ACTION[method] || method.toLowerCase();
-
-      // Get tenant configuration for API access
-      const config = await storage.loadConfig(address);
+      const tenantId = address;
+      const chainConfig = await storage.loadChainConfig(tenantId, chainId);
       let referendum: ReferendumInfo = { id: referendumId };
-      
-      if (config?.api) {
-        const api: ApiPromise = config.api;
+
+      if (chainConfig?.api) {
+        const api: ApiPromise = chainConfig.api;
         referendum = await getReferendumInfo(api, referendumId);
-      } else {
-        logger.warn(`No API instance available for tenant ${address}`);
       }
 
-      // Extract vote data if this is a vote event
       const vote = extractVoteData(eventData, method);
 
-      // Construct enriched log entry
-      const logEntry: GovernanceLogEntry = {
+      return {
         timestamp: new Date().toISOString(),
         type: 'governance',
         section: 'referenda',
@@ -443,83 +302,56 @@ const governance: ActivityPlugin = {
         address,
         referendum,
         vote,
-        details: eventData.slice(1), // Store remaining fields
+        details: eventData.slice(1),
       };
-
-      logger.info(`Governance log created for ${address}: ${action} on referendum #${referendumId}`);
-
-      return logEntry;
-    } catch (err) {
-      logger.error(`Failed to enrich governance event: ${err instanceof Error ? err.message : err}`);
+    } catch (err: any) {
+      logger.error(`Governance log error: ${err.message}`);
       return null;
     }
   },
 
-  /**
-   * Formats a log entry into a human-readable notification message
-   * @param logEntry - Structured log entry
-   * @returns Formatted notification message
-   */
   async formatMessage(logEntry: any): Promise<string> {
     try {
-      // Validate required fields
-      if (!logEntry || !logEntry.action) {
-        logger.warn('Missing or invalid log entry for message formatting');
-        return '🏛️ Governance event occurred';
-      }
+      if (!logEntry || !logEntry.action) return 'Governance event occurred';
 
       const { action, referendum, vote, blockNumber, method } = logEntry;
       const refId = referendum?.id || 'unknown';
-      
-      // Get track info if available
       const trackName = getTrackName(referendum?.track);
       const trackInfo = trackName ? ` (${trackName})` : '';
-      
-      // Format block info
       const blockInfo = blockNumber ? ` at block #${blockNumber}` : '';
 
-      // Create appropriate message based on action type
       switch (action) {
         case 'submitted':
         case 'proposed':
-          return `📝 New Referendum #${refId}${trackInfo} submitted${blockInfo}`;
-
+          return `New Referendum #${refId}${trackInfo} submitted${blockInfo}`;
         case 'voted':
           if (vote) {
-            const voteType = vote.aye ? '✅ Aye' : '❌ Nay';
+            const voteType = vote.aye ? 'Aye' : 'Nay';
             const conviction = vote.conviction ? ` with ${vote.conviction}x conviction` : '';
             const amount = vote.balance ? ` (${formatBalance(vote.balance)})` : '';
-            return `🗳️ Voted ${voteType} on Referendum #${refId}${trackInfo}${conviction}${amount}${blockInfo}`;
+            return `Voted ${voteType} on Referendum #${refId}${trackInfo}${conviction}${amount}${blockInfo}`;
           }
-          return `🗳️ Voted on Referendum #${refId}${trackInfo}${blockInfo}`;
-
+          return `Voted on Referendum #${refId}${trackInfo}${blockInfo}`;
         case 'approved':
-          if (method === 'Confirmed') {
-            return `✅ Referendum #${refId}${trackInfo} confirmed${blockInfo}`;
-          }
-          return `✅ Referendum #${refId}${trackInfo} approved${blockInfo}`;
-
+          return method === 'Confirmed'
+            ? `Referendum #${refId}${trackInfo} confirmed${blockInfo}`
+            : `Referendum #${refId}${trackInfo} approved${blockInfo}`;
         case 'rejected':
-          return `❌ Referendum #${refId}${trackInfo} rejected${blockInfo}`;
-
+          return `Referendum #${refId}${trackInfo} rejected${blockInfo}`;
         case 'executed':
-          return `⚡ Referendum #${refId}${trackInfo} executed successfully${blockInfo}`;
-
+          return `Referendum #${refId}${trackInfo} executed successfully${blockInfo}`;
         case 'cancelled':
-          return `🚫 Referendum #${refId}${trackInfo} cancelled${blockInfo}`;
-
+          return `Referendum #${refId}${trackInfo} cancelled${blockInfo}`;
         case 'killed':
-          return `💀 Referendum #${refId}${trackInfo} killed${blockInfo}`;
-
+          return `Referendum #${refId}${trackInfo} killed${blockInfo}`;
         case 'timedout':
-          return `⏱️ Referendum #${refId}${trackInfo} timed out${blockInfo}`;
-
+          return `Referendum #${refId}${trackInfo} timed out${blockInfo}`;
         default:
-          return `🏛️ Referendum #${refId}${trackInfo}: ${action}${blockInfo}`;
+          return `Referendum #${refId}${trackInfo}: ${action}${blockInfo}`;
       }
     } catch (err) {
       logger.error(`Error formatting governance message: ${err instanceof Error ? err.message : err}`);
-      return '🏛️ Governance event occurred';
+      return 'Governance event occurred';
     }
   },
 };

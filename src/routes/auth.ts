@@ -27,7 +27,8 @@
  * @description Accepts EITHER:
  *   • { email } → email-based JWT
  *   • { address, signature, message } → wallet-signed JWT
- */
+ */// SPDX-License-Identifier: MIT
+// routes/auth.ts
 
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
@@ -35,10 +36,40 @@ import crypto from 'crypto';
 import { decodeAddress, signatureVerify } from '@polkadot/util-crypto';
 import { u8aToHex } from '@polkadot/util';
 import config from '../config';
-import storage from '../utils/storage';
 import logger from '../utils/logger';
+import path from 'path';
+import { promises as fsPromises } from 'fs';
 
 const router = Router();
+
+// ──────────────────────────────────────────────────────────────────────
+// TENANT METADATA (async)
+// ──────────────────────────────────────────────────────────────────────
+const getTenantMetadataPath = (tenantId: string): string => {
+  const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+  const DATA_ROOT = path.join(PROJECT_ROOT, 'src', 'data');
+  return path.join(DATA_ROOT, tenantId, 'tenant.json');
+};
+
+const saveTenantMetadata = async (tenantId: string, data: any): Promise<void> => {
+  const file = getTenantMetadataPath(tenantId);
+  const dir = path.dirname(file);
+  await fsPromises.mkdir(dir, { recursive: true });
+  await fsPromises.writeFile(file, JSON.stringify(data, null, 2), 'utf8');
+  logger.info(`Tenant metadata saved → ${file}`);
+};
+
+const loadTenantMetadata = async (tenantId: string): Promise<any | null> => {
+  const file = getTenantMetadataPath(tenantId);
+  try {
+    const raw = await fsPromises.readFile(file, 'utf8');
+    return JSON.parse(raw);
+  } catch (err: any) {
+    if (err.code === 'ENOENT') return null;
+    logger.error(`Failed to read tenant metadata: ${err.message}`);
+    throw err;
+  }
+};
 
 /**
  * @route POST /auth
@@ -47,83 +78,91 @@ const router = Router();
 router.post('/', async (req: Request, res: Response) => {
   const { email, address, signature, message } = req.body;
 
-  // ──────────────────────────────────────────────────────────────
-  // 1. EMAIL AUTH
-  // ──────────────────────────────────────────────────────────────
-  if (email) {
-    if (!email.includes('@')) {
-      return res.status(400).json({ error: 'Valid email required' });
-    }
+  try {
+    // ──────────────────────────────────────────────────────────────
+    // 1. EMAIL AUTH
+    // ──────────────────────────────────────────────────────────────
+    if (email) {
+      if (typeof email !== 'string' || !email.includes('@')) {
+        return res.status(400).json({ error: 'Valid email required' });
+      }
 
-    const tenantId = crypto.createHash('sha256').update(email).digest('hex').slice(0, 16);
-    const token = jwt.sign({ tenantId, email, method: 'email' }, config.jwtSecret, {
-      expiresIn: '30d',
-    });
-
-    // Ensure tenant exists
-    if (!(await storage.loadConfig(tenantId))) {
-      await storage.saveConfig(tenantId, {
-        email,
-        createdAt: new Date().toISOString(),
-        authMethod: 'email',
+      const tenantId = crypto.createHash('sha256').update(email).digest('hex').slice(0, 16);
+      const token = jwt.sign({ tenantId, email, method: 'email' }, config.jwtSecret, {
+        expiresIn: '30d',
       });
+
+      const existing = await loadTenantMetadata(tenantId);
+      if (!existing) {
+        await saveTenantMetadata(tenantId, {
+          email,
+          createdAt: new Date().toISOString(),
+          authMethod: 'email',
+        });
+      }
+
+      logger.event(`Email auth: ${email} → ${tenantId}`);
+      return res.json({ token, tenantId, method: 'email' });
     }
 
-    logger.event(`Email auth: ${email} → ${tenantId}`);
-    return res.json({ token, tenantId, method: 'email' });
-  }
+    // ──────────────────────────────────────────────────────────────
+    // 2. WALLET SIGNING AUTH
+    // ──────────────────────────────────────────────────────────────
+    if (address && signature && message) {
+      // Validate address
+      let publicKey: Uint8Array;
+      try {
+        publicKey = decodeAddress(address);
+      } catch {
+        return res.status(400).json({ error: 'Invalid Polkadot address' });
+      }
 
-  // ──────────────────────────────────────────────────────────────
-  // 2. WALLET SIGNING AUTH
-  // ──────────────────────────────────────────────────────────────
-  if (address && signature && message) {
-    let publicKey: Uint8Array;
-    try {
-      publicKey = decodeAddress(address);
-    } catch {
-      return res.status(400).json({ error: 'Invalid Polkadot address' });
-    }
+      // Verify signature
+      const { isValid } = signatureVerify(message, signature, u8aToHex(publicKey));
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
 
-    const { isValid } = signatureVerify(message, signature, u8aToHex(publicKey));
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+      // Extract timestamp from message
+      const match = message.match(/Timestamp: ([\d\-T:.Z]+)/);
+      if (!match) {
+        return res.status(400).json({ error: 'Invalid message format: missing timestamp' });
+      }
+      const timestamp = new Date(match[1]);
+      const now = new Date();
+      const diffMs = Math.abs(now.getTime() - timestamp.getTime());
+      if (isNaN(timestamp.getTime()) || diffMs > 5 * 60 * 1000) {
+        return res.status(400).json({ error: 'Message expired (must be < 5 min)' });
+      }
 
-    // Prevent replay attacks
-    const match = message.match(/Timestamp: ([\d\-T:.Z]+)/);
-    if (!match) {
-      return res.status(400).json({ error: 'Invalid message format' });
-    }
-    const timestamp = match ? new Date(match[1]) : new Date();
-    const now = new Date();
-    const diffMs = Math.abs(now.getTime() - timestamp.getTime());
-    if (isNaN(timestamp.getTime()) || diffMs > 5 * 60 * 1000) {
-      return res.status(400).json({ error: 'Message expired or malformed' });
-    }
-
-    const tenantId = crypto.createHash('sha256').update(address).digest('hex').slice(0, 16);
-    const token = jwt.sign({ tenantId, address, method: 'wallet' }, config.jwtSecret, {
-      expiresIn: '30d',
-    });
-
-    if (!(await storage.loadConfig(tenantId))) {
-      await storage.saveConfig(tenantId, {
-        address,
-        createdAt: new Date().toISOString(),
-        authMethod: 'wallet',
+      const tenantId = crypto.createHash('sha256').update(address).digest('hex').slice(0, 16);
+      const token = jwt.sign({ tenantId, address, method: 'wallet' }, config.jwtSecret, {
+        expiresIn: '30d',
       });
+
+      const existing = await loadTenantMetadata(tenantId);
+      if (!existing) {
+        await saveTenantMetadata(tenantId, {
+          address,
+          createdAt: new Date().toISOString(),
+          authMethod: 'wallet',
+        });
+      }
+
+      logger.event(`Wallet auth: ${address} → ${tenantId}`);
+      return res.json({ token, tenantId, method: 'wallet', address });
     }
 
-    logger.event(`Wallet auth: ${address} → ${tenantId}`);
-    return res.json({ token, tenantId, method: 'wallet', address });
+    // ──────────────────────────────────────────────────────────────
+    // 3. INVALID INPUT
+    // ──────────────────────────────────────────────────────────────
+    return res.status(400).json({
+      error: 'Provide either { email } or { address, signature, message }',
+    });
+  } catch (error: any) {
+    logger.error(`Auth error: ${error.message}`);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-
-  // ──────────────────────────────────────────────────────────────
-  // 3. INVALID INPUT
-  // ──────────────────────────────────────────────────────────────
-  return res.status(400).json({
-    error: 'Provide either { email } or { address, signature, message }',
-  });
 });
 
 export default router;

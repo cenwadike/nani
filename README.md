@@ -7,7 +7,7 @@
 [![Polkadot](https://img.shields.io/badge/Polkadot-E6007A?style=flat&logo=polkadot&logoColor=white)](https://polkadot.network/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Built for Polkadot Africa Mentorship | October 2025**
+**Built for Polkadot**
 
 ## Overview
 
@@ -227,16 +227,16 @@ npm install
 ### **2. Configure .env**
 
 ```bash
-# Server Configuration
+# Server
 PORT=3000
 NODE_ENV=development
 
 # Auth
 JWT_SECRET=your-super-secret-jwt-key-here
 
-# Polkadot
-PAPI_WS=wss://westend-rpc.polkadot.io
-BACKUP_PAPI_WS=wss://rpc.polkadot.io,wss://kusama-rpc.polkadot.io
+# Endpoints
+WESTEND_RPC_URLS=wss://westend-rpc.polkadot.io,wss://westend-rpc.dwellir.com
+ASSETHUB_RPC_URLS=wss://westend-asset-hub-rpc.polkadot.io
 
 # Encryption
 ENCRYPTION_KEY=32-character-aes-key-1234567890
@@ -332,46 +332,153 @@ curl http://localhost:3000/health
 
  **Setup**
 ```json
- curl -X POST http://localhost:3000/setup \
+  curl -X POST http://localhost:3000/setup \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJtZXRob2QiOiJlbWFpbCIsImlhdCI6MTc2MjM2MzAxOCwiZXhwIjoxNzY0OTU1MDE4fQ.NAUl7gYF0d5CABeETaICQ0WHZUBhCA0P6xP2WN1N3gk" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJpYXQiOjE3NjIyMTAwMjIsImV4cCI6MTc2NDgwMjAyMn0.GrKypWHQv5CVQ8u4E0F7xTQWk5Ga0CYMgPqNqX02qYM" \
   -d '{
-    "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
-    "plugins": {
-      "activities": ["transfers", "extrinsics"],
-      "notifications": [
-        {
-          "type": "email",
-          "config": {
-            "to": "cenwadike@gmail.com",
-            "subject": "Test from Nani"
-          }
+    "setups": [
+      {
+        "chainId": "westend",
+        "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "plugins": {
+          "activities": ["extrinsics", "staking", "governance", "transfers"],
+          "notifications": [
+            {
+              "type": "discord",
+              "config": {
+                "webhook": "https://discord.com/api/webhooks/1234567890/abcXYZ"
+              }
+            },
+            {
+              "type": "email",
+              "config": {
+                "to": "alice@example.com",
+                "subject": "[Nani] Westend Activity",
+                "html": true
+              }
+            }
+          ]
         }
-      ]
-    }
+      },
+      {
+        "chainId": "asset-hub-westend",
+        "address": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "plugins": {
+          "activities": ["extrinsics", "staking", "governance", "transfers"],
+          "notifications": [ 
+            {
+              "type": "email",
+              "config": {
+                "to": "alice@example.com",
+                "subjectPrefix": "[AssetHub]"
+              }
+            },
+            {
+              "type": "sms",
+              "config": {
+                "phone": "+15551234567"
+              }
+            }
+          ]
+        }
+      }
+    ]
   }'             
 ```
   **Expectated Response**
 
 ```json
   {
-    "success":true,"message":"Configuration saved","address":"15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5","plugins":{"activities":["transfers","extrinsics"],"notifications":["email"]}
+    "success":true,
+    "message":"All chain configs saved",
+    "results":[
+      {
+        "chainId":"westend",
+        "success":true,
+        "address":"15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+        "tokenSymbol":"WND"
+      },
+      {
+        "chainId":"asset-hub-westend",
+        "success":true,
+        "address":"15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+        "tokenSymbol":"WND"
+      }
+    ]
   } 
 ```
 
-- **Analytics**
+ **Analytics**
 
 ```bash
-curl -X GET "http://localhost:3000/stats" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJpYXQiOjE3NjIyMTAwMjIsImV4cCI6MTc2NDgwMjAyMn0.GrKypWHQv5CVQ8u4E0F7xTQWk5Ga0CYMgPqNqX02qYM" \
-  -H "Content-Type: application/json"  
+ curl -X GET "http://localhost:3000/stats?chainId=westend&from=2025-11-01&to=2025-11-05" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJtZXRob2QiOiJlbWFpbCIsImlhdCI6MTc2MjM2OTA5NiwiZXhwIjoxNzY0OTYxMDk2fQ.kl_soS_4LgkpAdfJ4FI9Pkko5btgOx-moH1eBvurA70" | jq . 
 ```
 
+ **Response**
 ```json
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   480  100   480    0     0  17551      0 --:--:-- --:--:-- --:--:-- 17777
+
 {
-  "plugin":"basic","stats":{"totalEvents":0,"incoming":0,"outgoing":0,"totalAmountIn":0,"totalAmountOut":0,"firstEvent":null,"lastEvent":null},"logsCount":0
+  "plugin": "basic",
+  "filters": {
+    "chainId": "westend",
+    "from": "2025-11-01",
+    "to": "2025-11-05"
+  },
+  "result": {
+    "logsProcessed": 0,
+    "stats": {
+      "totalEvents": 0,
+      "incoming": 0,
+      "outgoing": 0,
+      "totalAmountIn": 0,
+      "totalAmountOut": 0,
+      "firstEvent": null,
+      "lastEvent": null
+    }
+  },
+  "storage": {
+    "totalSizeBytes": 0,
+    "logFileCount": 0,
+    "chainCount": 2,
+    "chains": [
+      {
+        "chainId": "asset-hub-westend",
+        "logCount": 0,
+        "sizeBytes": 0
+      },
+      {
+        "chainId": "westend",
+        "logCount": 0,
+        "sizeBytes": 0
+      }
+    ],
+    "totalSizeMB": 0
+  },
+  "generatedAt": "2025-11-05T18:59:05.090Z"
 }
 ```
+
+ **Export**
+ ```bash
+   curl -J -O \
+  -G "http://localhost:3000/export" \
+  -H "tenantId: b3ed617e005ce4db" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImIzZWQ2MTdlMDA1Y2U0ZGIiLCJlbWFpbCI6ImNlbndhZGlrZUBnbWFpbC5jb20iLCJtZXRob2QiOiJlbWFpbCIsImlhdCI6MTc2MjM2NjUwMiwiZXhwIjoxNzY0OTU4NTAyfQ.tFd6E9HB9n8o3XpF5LUyY4Kkz0bgJqZ4uuR7kGN7HU8" \
+  --data-urlencode "chainId=westend" \
+  --data-urlencode "type=transfer,staking,governance" \
+  --data-urlencode "format=csv"
+ ```
+
+ **Response**
+ ```sh
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                  Dload  Upload   Total   Spent    Left  Speed
+  100    33  100    33    0     0   1582      0 --:--:-- --:--:-- --:--:--  1650
+ ```
 
 ## **📊 Back of the envelope performance**
 
