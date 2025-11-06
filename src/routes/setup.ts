@@ -56,8 +56,7 @@ interface ChainSetup {
 interface SetupResult {
   chainId: string;
   success: boolean;
-  address?: string;
-  tokenSymbol?: string;
+  data?: any;
   error?: string;
 }
 
@@ -255,8 +254,7 @@ router.post('/', async (req: Request, res: Response) => {
       logger.info(`${prefix} → saved`);
 
       result.success = true;
-      result.address = polkadotAddress ?? undefined;
-      result.tokenSymbol = chain.tokenSymbol;
+      result.data = configData;
     } catch (err: any) {
       const msg = err.message;
       logger.error(`${prefix} → ${msg}`);

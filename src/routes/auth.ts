@@ -27,8 +27,8 @@
  * @description Accepts EITHER:
  *   • { email } → email-based JWT
  *   • { address, signature, message } → wallet-signed JWT
- */// SPDX-License-Identifier: MIT
-// routes/auth.ts
+ * 
+ */
 
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
@@ -39,34 +39,47 @@ import config from '../config';
 import logger from '../utils/logger';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
+import CryptoJS from 'crypto-js';
 
 const router = Router();
 
 // ──────────────────────────────────────────────────────────────────────
-// TENANT METADATA (async)
+// TENANT METADATA (ENCRYPTED) - REPLACE THE OLD ONES
 // ──────────────────────────────────────────────────────────────────────
+
+const encrypt = (data: any): string =>
+  CryptoJS.AES.encrypt(JSON.stringify(data), config.encryptionKey).toString();
+
+const decrypt = (encrypted: string): any => {
+  const bytes = CryptoJS.AES.decrypt(encrypted, config.encryptionKey);
+  const text = bytes.toString(CryptoJS.enc.Utf8);
+  if (!text) throw new Error('Decryption failed');
+  return JSON.parse(text);
+};
+
 const getTenantMetadataPath = (tenantId: string): string => {
   const PROJECT_ROOT = path.resolve(__dirname, '../../..');
   const DATA_ROOT = path.join(PROJECT_ROOT, 'src', 'data');
-  return path.join(DATA_ROOT, tenantId, 'tenant.json');
+  return path.join(DATA_ROOT, tenantId, 'tenant.json.enc'); // note .enc extension
 };
 
 const saveTenantMetadata = async (tenantId: string, data: any): Promise<void> => {
   const file = getTenantMetadataPath(tenantId);
   const dir = path.dirname(file);
   await fsPromises.mkdir(dir, { recursive: true });
-  await fsPromises.writeFile(file, JSON.stringify(data, null, 2), 'utf8');
-  logger.info(`Tenant metadata saved → ${file}`);
+  const encrypted = encrypt(data);
+  await fsPromises.writeFile(file, encrypted, 'utf8');
+  logger.info(`Encrypted tenant metadata saved → ${file}`);
 };
 
 const loadTenantMetadata = async (tenantId: string): Promise<any | null> => {
   const file = getTenantMetadataPath(tenantId);
   try {
-    const raw = await fsPromises.readFile(file, 'utf8');
-    return JSON.parse(raw);
+    const encrypted = await fsPromises.readFile(file, 'utf8');
+    return decrypt(encrypted);
   } catch (err: any) {
     if (err.code === 'ENOENT') return null;
-    logger.error(`Failed to read tenant metadata: ${err.message}`);
+    logger.error(`Failed to read/decrypt tenant metadata: ${err.message}`);
     throw err;
   }
 };

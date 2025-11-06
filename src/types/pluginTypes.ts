@@ -66,7 +66,7 @@ export interface ActivityPlugin {
    * @function formatMessage
    * @param logEntry - Structured log data (already contains chainId & tokenSymbol)
    */
-  formatMessage(logEntry: any): Promise<string> | string;
+  formatMessage(logEntry: any, tokenSymbol: string): Promise<string> | string;
 }
 
 /**

@@ -288,19 +288,35 @@ npm start
 - Verify Installation
 
 ```bash
-# Check health endpoint
-curl http://localhost:3000/health
-
+  # Check health endpoint
+  curl -X GET http://localhost:3000/health                                                                      
 ```
 
 **Expected Response**:
 
 ```json
 {
-  "status": "ok",
-  "papi": "connected",
-  "uptime": 123,
-  "timestamp": "2025-10-03T12:00:00.000Z"
+  "status":"ok",
+  "timestamp":"2025-11-06T21:04:27.548Z","
+  papi":{
+      "westend":"connected",
+      "asset-hub-westend":"connected"
+  },
+  "stats":{
+    "activeTenants":1,
+    "eventsProcessed24h":0,
+    "notificationsSent24h":0,
+    "uptimeHours":0.05
+  },"
+  system":{
+    "memoryUsageMB":214,
+    "cpuPercent":13.7
+  },
+  "cluster":{
+    "workerId":6,
+    "pid":23024,
+    "role":"rest"
+  }
 }
 ```
 

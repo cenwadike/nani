@@ -12,6 +12,8 @@ RUN npm install --production
 
 # Copy compiled code only
 COPY dist ./dist
+COPY swagger.yaml ./swagger.yaml
+COPY public ./public
 
 # Create persistent data directory for tenant storage
 RUN mkdir -p ./data
@@ -24,4 +26,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 
 # Start the cluster entry point
-CMD ["node", "dist/cluster.js"]
+CMD ["node", "dist/src/cluster.js"]

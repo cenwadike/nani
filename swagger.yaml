@@ -1,483 +1,868 @@
 openapi: 3.0.3
 info:
-    title: 'Nani API'
-    version: 1.0.0
-    description: 'Real-Time Polkadot Event Streaming and Notifications API'
+  title: 'Nani API - Real-Time Polkadot Event Streaming and Notifications'
+  version: 1.0.0
+
 servers:
-    -
-        url: 'http://localhost:3000'
-        description: Local
-    -
-        url: 'https://nani-demo.railway.app'
-        description: Production
+  - url: 'http://localhost:3000'
+    description: 🏠 Local Development
+  - url: 'https://nani-demo.railway.app'
+    description: 🌐 Live Production Server
+
+tags:
+  - name: Authentication
+    description: |
+      Generate JWT tokens for API access.
+      
+      Supports both email-based (quick testing) and wallet signature-based (production) authentication.
+  - name: Setup
+    description: |
+      Configure multi-chain monitoring with activity plugins and notification channels.
+      
+      One request can setup multiple chains simultaneously.
+  - name: Stats
+    description: |
+      Real-time analytics computed from encrypted logs.
+      
+      No database required - stats generated on-demand using pluggable compute engines.
+  - name: Export
+    description: |
+      Download event logs in CSV or JSON format.
+      
+      Filter by chain, event type, and date range. Multi-type exports create ZIP archives.
+
 paths:
-    /auth:
-        post:
-            summary: 'Generate JWT token via email or wallet signature'
-            tags:
-                - Authentication
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            oneOf:
-                                -
-                                    $ref: '#/components/schemas/AuthEmailRequest'
-                                -
-                                    $ref: '#/components/schemas/AuthWalletRequest'
-                        examples:
-                            email:
-                                summary: 'Email-based login'
-                                value:
-                                    email: alice@example.com
-                            wallet:
-                                summary: 'Wallet-signed login'
-                                value:
-                                    address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-                                    signature: 0x8f5a4c2e1b...
-                                    message: "Sign this message to authenticate with Nani.\nTimestamp: 2025-11-05T12:34:56.789Z\n"
-            responses:
-                '200':
-                    description: 'JWT generated'
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AuthSuccessResponse'
-                            examples:
-                                email:
-                                    value: {token: eyJhbGciOiJIUzI1NiIs..., tenantId: a1b2c3d4e5f6g7h8, method: email}
-                                wallet:
-                                    value: {token: eyJhbGciOiJIUzI1NiIs..., tenantId: 9f86d081884c7d65, method: wallet, address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY}
-                '400':
-                    description: 'Invalid input'
-                    content:
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    error: {type: string}
-                            example:
-                                error: 'Provide either { email } or { address, signature, message }'
-                '401':
-                    description: 'Invalid wallet signature'
-                    content:
-                        application/json:
-                            example:
-                                error: 'Invalid signature'
-                '500':
-                    description: 'Server error'
-    /export:
-        get:
-            summary: 'Export tenant event logs (CSV / JSON / ZIP)'
-            tags:
-                - Export
-            security:
-                -
-                    bearerAuth: []
-            parameters:
-                -
-                    in: query
-                    name: chainId
-                    schema:
-                        type: string
-                    required: false
-                    description: 'Filter by chain (e.g. westend, polkadot)'
-                    example: westend
-                -
-                    in: query
-                    name: type
-                    schema:
-                        type: string
-                    required: false
-                    description: 'Comma-separated event types. Omit for all.'
-                    example: 'transfer,staking'
-                -
-                    in: query
-                    name: format
-                    schema:
-                        type: string
-                        enum:
-                            - csv
-                            - json
-                        default: csv
-                    required: false
-                -
-                    in: query
-                    name: from
-                    schema:
-                        type: string
-                        format: date
-                    required: false
-                    description: 'Inclusive start date (YYYY-MM-DD)'
-                    example: '2025-11-01'
-                -
-                    in: query
-                    name: to
-                    schema:
-                        type: string
-                        format: date
-                    required: false
-                    description: 'Inclusive end date (YYYY-MM-DD)'
-                    example: '2025-11-05'
-            responses:
-                '200':
-                    description: "- **CSV**: Single file or ZIP (one CSV per type)  \n- **JSON**: `{ logs: [...] }`  \nFilename set via `Content-Disposition`\n"
-                    content:
-                        text/csv:
-                            schema:
-                                type: string
-                                format: binary
-                        application/zip:
-                            schema:
-                                type: string
-                                format: binary
-                        application/json:
-                            schema:
-                                type: object
-                                properties:
-                                    logs: {type: array, items: {$ref: '#/components/schemas/EventLog'}}
-                '400':
-                    description: 'Invalid query parameters'
-                    content:
-                        application/json:
-                            example:
-                                error: 'Invalid "from" date'
-                '404':
-                    description: 'No logs match filters'
-                    content:
-                        application/json:
-                            example:
-                                error: 'No logs for requested type(s)'
-                '500':
-                    description: 'Internal error'
-    /setup:
-        post:
-            summary: 'Configure monitored addresses and plugins per chain'
-            description: "Batch configure one or more chains for a tenant. Validates:\n- Chain ID (must exist in `CHAINS`)\n- Polkadot SS58 address\n- Activity plugin names (must be registered)\n- Notification plugin types + config validation via `validateConfig()`\n"
-            tags:
-                - Setup
-            security:
-                -
-                    bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/SetupRequest'
-                        examples:
-                            single-chain:
-                                summary: 'Configure Westend with transfers + Discord alerts'
-                                value:
-                                    setups: [{chainId: westend, address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY, plugins: {activities: [transfer], notifications: [{type: discord, config: {webhookUrl: 'https://discord.com/api/webhooks/...'}}]}}]
-                            multi-chain:
-                                summary: 'Configure two chains'
-                                value:
-                                    setups: [{chainId: polkadot, address: 14E5wP1t7g8Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3, plugins: {activities: [transfer, staking], notifications: [{type: email, config: {to: alice@example.com}}]}}, {chainId: westend, address: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty, plugins: {activities: [governance], notifications: []}}]
-            responses:
-                '200':
-                    description: 'All configurations saved successfully'
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SetupSuccessResponse'
-                            examples:
-                                success:
-                                    summary: 'All chains configured'
-                                    value: {success: true, message: 'All chain configs saved', results: [{chainId: westend, success: true, address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY, tokenSymbol: WND}]}
-                '400':
-                    description: 'Validation failed for one or more setups'
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SetupErrorResponse'
-                            examples:
-                                invalid-chain:
-                                    summary: 'Invalid chain ID'
-                                    value: {success: false, message: '1 config(s) failed', results: [{chainId: invalid-chain, success: false, error: 'Invalid chainId. Valid: [polkadot, westend, kusama]'}]}
-                                invalid-address:
-                                    summary: 'Invalid SS58 address'
-                                    value: {success: false, message: '1 config(s) failed', results: [{chainId: westend, success: false, error: 'Invalid SS58 address'}]}
-                '500':
-                    description: 'Internal server error'
-    /stats:
-        get:
-            summary: 'Compute analytics using a pluggable stats plugin'
-            description: "Returns computed statistics from tenant logs using the specified `stats` plugin.\nIncludes:\n- Filtered log count\n- Plugin-specific `stats` result\n- On-disk storage metadata (file count, size per chain)\n"
-            tags:
-                - Stats
-            security:
-                -
-                    bearerAuth: []
-            parameters:
-                -
-                    in: query
-                    name: plugin
-                    schema:
-                        type: string
-                        default: basic
-                    required: false
-                    description: 'Name of the registered stats plugin'
-                    example: basic
-                -
-                    in: query
-                    name: chainId
-                    schema:
-                        type: string
-                    required: false
-                    description: 'Filter logs to a single chain'
-                    example: westend
-                -
-                    in: query
-                    name: from
-                    schema:
-                        type: string
-                        format: date
-                    required: false
-                    description: 'Inclusive start date (UTC, YYYY-MM-DD)'
-                    example: '2025-11-01'
-                -
-                    in: query
-                    name: to
-                    schema:
-                        type: string
-                        format: date
-                    required: false
-                    description: 'Inclusive end date (UTC, YYYY-MM-DD)'
-                    example: '2025-11-05'
-            responses:
-                '200':
-                    description: 'Analytics computed successfully'
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/StatsResponse'
-                            examples:
-                                basic-plugin:
-                                    summary: 'Basic stats for westend (last 5 days)'
-                                    value: {plugin: basic, filters: {chainId: westend, from: '2025-11-01', to: '2025-11-05'}, result: {logsProcessed: 842, stats: {totalTransfers: 320, totalStaked: '124500000000000', uniqueValidators: 12}}, storage: {totalSizeBytes: 2841293, totalSizeMB: 2.71, logFileCount: 5, chainCount: 1, chains: [{chainId: westend, logCount: 842, sizeBytes: 2841293}]}, generatedAt: '2025-11-05T14:22:10.123Z'}
-                '400':
-                    description: 'Invalid query parameters'
-                    content:
-                        application/json:
-                            example:
-                                error: 'Invalid "from" date'
-                '500':
-                    description: 'Internal server error'
-components:
-    securitySchemes:
-        bearerAuth:
-            type: http
-            scheme: bearer
-            bearerFormat: JWT
-    schemas:
-        AuthEmailRequest:
-            type: object
-            required:
-                - email
-            properties:
+  /health:
+    get:
+      summary: Health check with real-time system metrics
+      description: |
+        Returns live service health, chain connections, tenant stats,
+        and system resource usage. Perfect for Kubernetes liveness/readiness probes.
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  $ref: '#/components/schemas/HealthResponse/example'
+        '503':
+          description: Service unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /docs:
+    get:
+      summary: Interactive API documentation
+      tags: [System]
+      responses:
+        '200':
+          description: Swagger UI
+
+  /openapi.json:
+    get:
+      summary: Raw OpenAPI spec
+      tags: [System]
+      responses:
+        '200':
+          description: This document
+          content:
+            application/json: {}
+            
+  /auth:
+    post:
+      summary: '🔑 Generate JWT token'
+      description: |
+        Authenticate to receive a JWT token for API access.
+        
+        ### Two authentication methods:
+        
+        **1. Email Auth (Quick Testing)**
+        - Simple email-based authentication
+        - Great for development and demos
+        - No signature required
+        
+        **2. Wallet Auth (Production)**
+        - Sign a message with your Polkadot wallet
+        - Verify ownership of address
+        - Secure for production use
+        
+        ### Token Expiry
+        - Tokens valid for 30 days
+        - Store securely (never commit to git!)
+        - Use the 🔒 **Authorize** button to set your token
+        
+        ### Example Flow
+        1. Call this endpoint with email or wallet
+        2. Receive `token` in response
+        3. Click 🔒 **Authorize** button above
+        4. Paste token
+        5. All other endpoints now work!
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AuthEmailRequest'
+                - $ref: '#/components/schemas/AuthWalletRequest'
+            examples:
+              email:
+                summary: '📧 Email Authentication (Quick)'
+                value:
+                  email: alice@example.com
+              wallet:
+                summary: '👛 Wallet Signature (Secure)'
+                value:
+                  address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+                  signature: '0x8f5a4c2e1b3d7a9f...'
+                  message: "Sign this message to authenticate with Nani.\nTimestamp: 2025-11-05T12:34:56.789Z"
+      responses:
+        '200':
+          description: '✅ JWT token generated successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+              examples:
                 email:
-                    type: string
-                    format: email
-                    example: alice@example.com
-        AuthWalletRequest:
-            type: object
-            required:
-                - address
-                - signature
-                - message
-            properties:
-                address:
-                    type: string
-                    description: 'Polkadot SS58 address'
-                    example: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-                signature:
-                    type: string
-                    description: 'Hex-encoded signature (0x…)'
-                    example: 0x8f5a4c2e1b...
-                message:
-                    type: string
-                    description: 'Must include Timestamp: <ISO> (e.g., Timestamp: 2025-11-05T12:34:56Z)'
-                    example: "Sign this message to authenticate with Nani.\nTimestamp: 2025-11-05T12:34:56.789Z\n"
-        AuthSuccessResponse:
-            type: object
-            properties:
-                token:
-                    type: string
-                tenantId:
-                    type: string
-                method:
-                    type: string
-                    enum:
-                        - email
-                        - wallet
-                address:
-                    type: string
-                    nullable: true
-        ChainSetup:
-            type: object
-            required:
-                - chainId
-                - address
-                - plugins
-            properties:
-                chainId:
-                    type: string
-                    example: westend
-                address:
-                    type: string
-                    example: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-                plugins:
-                    type: object
-                    required:
-                        - activities
-                        - notifications
-                    properties:
-                        activities:
-                            type: array
-                            items:
-                                type: string
-                            minItems: 1
-                            example:
-                                - transfer
+                  summary: 'Email auth response'
+                  value: 
+                    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                    tenantId: 'a1b2c3d4e5f6g7h8'
+                    method: 'email'
+                wallet:
+                  summary: 'Wallet auth response'
+                  value: 
+                    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                    tenantId: '9f86d081884c7d65'
+                    method: 'wallet'
+                    address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+        '400':
+          description: '❌ Invalid request - missing required fields'
+          content:
+            application/json:
+              example:
+                error: 'Provide either { email } or { address, signature, message }'
+        '401':
+          description: '❌ Invalid signature - wallet verification failed'
+          content:
+            application/json:
+              example:
+                error: 'Invalid signature'
+
+  /setup:
+    post:
+      summary: '⚙️ Configure multi-chain monitoring'
+      description: |
+        Setup event monitoring for one or more Polkadot chains.
+        
+        ### What this does:
+        1. Validates your Polkadot address (SS58 format)
+        2. Configures activity plugins (what events to monitor)
+        3. Configures notification channels (where to send alerts)
+        4. Starts streaming events in real-time
+        
+        ### Activity Plugins
+        - `transfers` - Balance transfers (incoming/outgoing)
+        - `staking` - Rewards, slashes, validator changes
+        - `governance` - Votes, proposals, referenda
+        - `extrinsics` - Any signed transaction
+        
+        ### Notification Channels
+        - `discord` - Webhook to Discord channel
+        - `sms` - Twilio SMS (requires phone number)
+        - `email` - SMTP email alerts
+        
+        ### Multi-Chain Setup
+        You can configure multiple chains in a single request:
+        ```json
+        {
+          "setups": [
+            { "chainId": "westend", "address": "5Grw...", ... },
+            { "chainId": "polkadot", "address": "14E5...", ... }
+          ]
+        }
+        ```
+        
+        ### Important Notes
+        - Address must be valid SS58 format for the chain
+        - All plugin names must be registered (see examples)
+        - Notification configs are validated (invalid webhooks rejected)
+        - Previous configs are **replaced** (not merged)
+      tags:
+        - Setup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupRequest'
+            examples:
+              minimal:
+                summary: '🎯 Minimal Setup (Transfers only)'
+                description: 'Monitor transfers on Westend, send Discord alerts'
+                value:
+                  setups:
+                    - chainId: westend
+                      address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+                      plugins:
+                        activities: ['transfers']
                         notifications:
-                            type: array
-                            items:
-                                $ref: '#/components/schemas/NotificationConfig'
-        NotificationConfig:
-            type: object
-            required:
-                - type
-                - config
-            properties:
-                type:
-                    type: string
-                    example: discord
-                config:
-                    type: object
-                    example:
-                        webhookUrl: 'https://discord.com/api/webhooks/...'
-        SetupRequest:
-            type: object
-            required:
-                - setups
-            properties:
-                setups:
+                          - type: discord
+                            config:
+                              webhook: 'https://discord.com/api/webhooks/1234567890/abc123...'
+              full-featured:
+                summary: '🚀 Full Setup (All Plugins)'
+                description: 'Monitor all events, multiple notification channels'
+                value:
+                  setups:
+                    - chainId: westend
+                      address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+                      plugins:
+                        activities: ['transfers', 'staking', 'governance', 'extrinsics']
+                        notifications:
+                          - type: discord
+                            config:
+                              webhook: 'https://discord.com/api/webhooks/...'
+                          - type: sms
+                            config:
+                              phone: '+15551234567'
+                          - type: email
+                            config:
+                              to: 'alice@example.com'
+              multi-chain:
+                summary: '🌐 Multi-Chain Setup'
+                description: 'Monitor multiple chains simultaneously'
+                value:
+                  setups:
+                    - chainId: polkadot
+                      address: '14E5wP1t7g8Y8v3Y8v3Y8v3Y...'
+                      plugins:
+                        activities: ['transfers', 'staking']
+                        notifications:
+                          - type: email
+                            config:
+                              to: 'alice@example.com'
+                    - chainId: westend
+                      address: '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'
+                      plugins:
+                        activities: ['governance']
+                        notifications: []
+      responses:
+        '200':
+          description: '✅ All configurations saved successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupSuccessResponse'
+              examples:
+                success:
+                  summary: 'Successful setup'
+                  value:
+                    success: true
+                    message: 'All chain configs saved'
+                    results:
+                      - chainId: westend
+                        success: true
+                        address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+                        tokenSymbol: 'WND'
+        '400':
+          description: '❌ Validation failed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupErrorResponse'
+              examples:
+                invalid-chain:
+                  summary: 'Invalid chain ID'
+                  value:
+                    success: false
+                    message: '1 config(s) failed'
+                    results:
+                      - chainId: 'invalid-chain'
+                        success: false
+                        error: 'Invalid chainId. Valid: [polkadot, westend, kusama]'
+                invalid-address:
+                  summary: 'Invalid address format'
+                  value:
+                    success: false
+                    message: '1 config(s) failed'
+                    results:
+                      - chainId: westend
+                        success: false
+                        error: 'Invalid SS58 address'
+
+  /stats:
+    get:
+      summary: '📊 Get real-time analytics'
+      description: |
+        Compute statistics from your event logs using pluggable analytics engines.
+        
+        ### How it works:
+        1. Reads encrypted logs from disk
+        2. Filters by your query parameters
+        3. Runs stats plugin computation
+        4. Returns aggregated results
+        
+        ### No Database Required
+        Stats are computed **on-demand** from JSONL log files.
+        This means:
+        - No database overhead
+        - No stale data
+        - Always up-to-date
+        - Scales horizontally
+        
+        ### Available Stats Plugins
+        - `basic` - Event counts, totals, PnL calculations
+        - `advanced` - Volume analysis, yield calculations, trends
+        
+        ### Filter Options
+        - `chainId` - Limit to specific chain
+        - `from` / `to` - Date range (YYYY-MM-DD)
+        - `plugin` - Which analytics engine to use
+        
+        ### Example Use Cases
+        - Portfolio tracking (total balance, PnL)
+        - Staking analytics (rewards, APY)
+        - Governance participation (vote history)
+        - Transaction volume analysis
+        
+        ### Performance
+        - 1M logs processed in ~2 seconds
+        - Results cached for 60 seconds
+        - Parallel processing for multiple chains
+      tags:
+        - Stats
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: plugin
+          schema:
+            type: string
+            default: basic
+          required: false
+          description: '🔌 Stats plugin name'
+          example: basic
+        - in: query
+          name: chainId
+          schema:
+            type: string
+          required: false
+          description: '🔗 Filter to specific chain'
+          example: westend
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          required: false
+          description: '📅 Start date (inclusive, UTC)'
+          example: '2025-11-01'
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          required: false
+          description: '📅 End date (inclusive, UTC)'
+          example: '2025-11-05'
+      responses:
+        '200':
+          description: '✅ Analytics computed successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+              examples:
+                basic:
+                  summary: 'Basic stats for Westend (5 days)'
+                  value:
+                    plugin: basic
+                    filters:
+                      chainId: westend
+                      from: '2025-11-01'
+                      to: '2025-11-05'
+                    result:
+                      logsProcessed: 842
+                      stats:
+                        totalTransfers: 320
+                        totalStaked: '124500000000000'
+                        uniqueValidators: 12
+                        governanceVotes: 5
+                    storage:
+                      totalSizeBytes: 2841293
+                      totalSizeMB: 2.71
+                      logFileCount: 5
+                      chainCount: 1
+                      chains:
+                        - chainId: westend
+                          logCount: 842
+                          sizeBytes: 2841293
+                    generatedAt: '2025-11-05T14:22:10.123Z'
+
+  /export:
+    get:
+      summary: '📥 Export event logs'
+      description: |
+        Download your encrypted event logs in CSV or JSON format.
+        
+        ### Export Formats
+        
+        **CSV** (Spreadsheet-ready)
+        - Great for Excel/Google Sheets
+        - One row per event
+        - Columns: timestamp, chainId, type, amount, from, to, ...
+        
+        **JSON** (Developer-friendly)
+        - Full event data
+        - Nested structures preserved
+        - Easy to parse programmatically
+        
+        ### Filtering
+        
+        **By Chain**
+        ```
+        ?chainId=westend
+        ```
+        
+        **By Event Type**
+        ```
+        ?type=transfers,staking
+        ```
+        Multiple types → ZIP archive with one file per type
+        
+        **By Date Range**
+        ```
+        ?from=2025-11-01&to=2025-11-05
+        ```
+        
+        ### File Naming
+        - Single type: `westend-transfers-2025-11-05.csv`
+        - Multiple types: `westend-events-2025-11-05.zip`
+        - All types: `westend-all-2025-11-05.csv`
+        
+        ### Security Note
+        Logs are **encrypted on disk** but **decrypted for export**.
+        Only you (with valid JWT) can decrypt your data.
+        
+        ### Size Limits
+        - Max 100MB per export
+        - Large exports split into multiple files
+        - Use date filters for better performance
+      tags:
+        - Export
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: chainId
+          schema:
+            type: string
+          required: false
+          description: '🔗 Chain to export (omit for all chains)'
+          example: westend
+        - in: query
+          name: type
+          schema:
+            type: string
+          required: false
+          description: '🏷️ Event types (comma-separated, omit for all)'
+          example: 'transfer,staking'
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [csv, json]
+            default: csv
+          required: false
+          description: '📄 Export format'
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          required: false
+          description: '📅 Start date (YYYY-MM-DD)'
+          example: '2025-11-01'
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          required: false
+          description: '📅 End date (YYYY-MM-DD)'
+          example: '2025-11-05'
+      responses:
+        '200':
+          description: '✅ File download started'
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
                     type: array
                     items:
-                        $ref: '#/components/schemas/ChainSetup'
-                    minItems: 1
-        SetupResult:
-            type: object
-            properties:
-                chainId:
-                    type: string
-                success:
-                    type: boolean
-                address:
-                    type: string
-                    nullable: true
-                tokenSymbol:
-                    type: string
-                    nullable: true
-                error:
-                    type: string
-                    nullable: true
-        SetupSuccessResponse:
-            type: object
-            properties:
-                success:
-                    type: boolean
-                message:
-                    type: string
-                results:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/SetupResult'
-        SetupErrorResponse:
-            type: object
-            properties:
-                success:
-                    type: boolean
-                message:
-                    type: string
-                results:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/SetupResult'
-        StatsFilters:
-            type: object
-            properties:
-                chainId:
-                    type: string
-                    nullable: true
-                from:
-                    type: string
-                    format: date
-                    nullable: true
+                      $ref: '#/components/schemas/EventLog'
+        '404':
+          description: '❌ No logs found matching filters'
+          content:
+            application/json:
+              example:
+                error: 'No logs found for the specified filters'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token from `POST /auth`.
+        
+        Click 🔒 **Authorize** button to set your token.
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-11-06T17:53:22.489Z"
+        papi:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [connected, disconnected, unknown]
+          example:
+            westend: connected
+            assetHub: connected
+            polkadot: disconnected
+        stats:
+          type: object
+          properties:
+            activeTenants:
+              type: integer
+              example: 47
+            eventsProcessed24h:
+              type: integer
+              example: 12453
+            notificationsSent24h:
+              type: integer
+              example: 8392
+            uptimeHours:
+              type: number
+              format: float
+              example: 168.5
+        system:
+          type: object
+          properties:
+            memoryUsageMB:
+              type: integer
+              example: 342
+            cpuPercent:
+              type: number
+              format: float
+              example: 12.4
+        cluster:
+          type: object
+          properties:
+            workerId:
+              type: integer
+              example: 3
+            pid:
+              type: integer
+              example: 12456
+            role:
+              type: string
+              enum: [monitoring, rest]
+              example: monitoring
+      example:
+        status: ok
+        timestamp: "2025-11-06T17:53:22.489Z"
+        papi:
+          westend: connected
+          assetHub: connected
+          polkadot: disconnected
+        stats:
+          activeTenants: 47
+          eventsProcessed24h: 12453
+          notificationsSent24h: 8392
+          uptimeHours: 168.5
+        system:
+          memoryUsageMB: 342
+          cpuPercent: 12.4
+        cluster:
+          workerId: 3
+          pid: 12456
+          role: monitoring
+
+    AuthEmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: 'Your email address'
+          example: 'alice@example.com'
+
+    AuthWalletRequest:
+      type: object
+      required: [address, signature, message]
+      properties:
+        address:
+          type: string
+          description: 'Polkadot SS58 address'
+          example: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+        signature:
+          type: string
+          description: 'Hex-encoded signature (0x...)'
+          example: '0x8f5a4c2e1b3d7a9f...'
+        message:
+          type: string
+          description: 'Message that was signed (must include timestamp)'
+          example: "Sign this message to authenticate with Nani.\nTimestamp: 2025-11-05T12:34:56.789Z"
+
+    AuthSuccessResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 'JWT token (valid for 30 days)'
+        tenantId:
+          type: string
+          description: 'Your unique tenant ID'
+        method:
+          type: string
+          enum: [email, wallet]
+          description: 'Authentication method used'
+        address:
+          type: string
+          nullable: true
+          description: 'Your wallet address (wallet auth only)'
+
+    ChainSetup:
+      type: object
+      required: [chainId, address, plugins]
+      properties:
+        chainId:
+          type: string
+          enum: [polkadot, westend, kusama, 'asset-hub-westend']
+          description: 'Chain identifier'
+          example: westend
+        address:
+          type: string
+          description: 'SS58 address to monitor'
+          example: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
+        plugins:
+          type: object
+          required: [activities, notifications]
+          properties:
+            activities:
+              type: array
+              items:
+                type: string
+                enum: [transfer, staking, governance, extrinsics]
+              minItems: 1
+              description: 'Event types to monitor'
+              example: ['transfer', 'staking']
+            notifications:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationConfig'
+              description: 'Notification channels'
+
+    NotificationConfig:
+      type: object
+      required: [type, config]
+      properties:
+        type:
+          type: string
+          enum: [discord, sms, email]
+          description: 'Notification channel type'
+        config:
+          type: object
+          description: 'Channel-specific configuration'
+          oneOf:
+            - type: object
+              title: Discord Config
+              properties:
+                webhook:
+                  type: string
+                  format: uri
+              required: [webhook]
+            - type: object
+              title: SMS Config
+              properties:
+                phone:
+                  type: string
+                  pattern: '^\+[1-9]\d{1,14}$'
+              required: [phone]
+            - type: object
+              title: Email Config
+              properties:
                 to:
-                    type: string
-                    format: date
-                    nullable: true
-        ChainStorageStat:
-            type: object
-            properties:
-                chainId:
-                    type: string
-                logCount:
-                    type: integer
-                sizeBytes:
-                    type: integer
-        StorageMetadata:
-            type: object
-            properties:
-                totalSizeBytes:
-                    type: integer
-                totalSizeMB:
-                    type: number
-                    format: float
-                logFileCount:
-                    type: integer
-                chainCount:
-                    type: integer
-                chains:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/ChainStorageStat'
-        StatsResult:
-            type: object
-            properties:
-                logsProcessed:
-                    type: integer
-                stats:
-                    type: object
-                    additionalProperties: true
-        StatsResponse:
-            type: object
-            properties:
-                plugin:
-                    type: string
-                filters:
-                    $ref: '#/components/schemas/StatsFilters'
-                result:
-                    $ref: '#/components/schemas/StatsResult'
-                storage:
-                    $ref: '#/components/schemas/StorageMetadata'
-                generatedAt:
-                    type: string
-                    format: date-time
-        HealthResponse:
-            type: object
-            required:
-                - status
-                - timestamp
-            properties:
-                status:
-                    type: string
-                    enum:
-                        - ok
-                timestamp:
-                    type: string
-                    format: date-time
-tags: []
+                  type: string
+                  format: email
+              required: [to]
+
+    SetupRequest:
+      type: object
+      required: [setups]
+      properties:
+        setups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChainSetup'
+          minItems: 1
+          description: 'Array of chain configurations'
+
+    SetupResult:
+      type: object
+      properties:
+        chainId:
+          type: string
+        success:
+          type: boolean
+        address:
+          type: string
+          nullable: true
+        tokenSymbol:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    SetupSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetupResult'
+
+    SetupErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetupResult'
+
+    StatsFilters:
+      type: object
+      properties:
+        chainId:
+          type: string
+          nullable: true
+        from:
+          type: string
+          format: date
+          nullable: true
+        to:
+          type: string
+          format: date
+          nullable: true
+
+    ChainStorageStat:
+      type: object
+      properties:
+        chainId:
+          type: string
+        logCount:
+          type: integer
+        sizeBytes:
+          type: integer
+
+    StorageMetadata:
+      type: object
+      properties:
+        totalSizeBytes:
+          type: integer
+        totalSizeMB:
+          type: number
+          format: float
+        logFileCount:
+          type: integer
+        chainCount:
+          type: integer
+        chains:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChainStorageStat'
+
+    StatsResult:
+      type: object
+      properties:
+        logsProcessed:
+          type: integer
+        stats:
+          type: object
+          additionalProperties: true
+
+    StatsResponse:
+      type: object
+      properties:
+        plugin:
+          type: string
+        filters:
+          $ref: '#/components/schemas/StatsFilters'
+        result:
+          $ref: '#/components/schemas/StatsResult'
+        storage:
+          $ref: '#/components/schemas/StorageMetadata'
+        generatedAt:
+          type: string
+          format: date-time
+
+    EventLog:
+      type: object
+      description: 'Decrypted event log entry'
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        chainId:
+          type: string
+        blockNumber:
+          type: integer
+        eventType:
+          type: string
+        data:
+          type: object
+          additionalProperties: true

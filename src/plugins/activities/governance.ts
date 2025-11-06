@@ -143,11 +143,6 @@ export function stopReferendumCacheCleanup(): void {
 // Helper Functions
 // ============================================================================
 
-function isAddress(value: any): boolean {
-  if (typeof value !== 'string') return false;
-  return value.length >= 47 && value.length <= 48;
-}
-
 function findAddressInData(data: any, address: string): boolean {
   if (data === address) return true;
   if (Array.isArray(data)) return data.some(item => findAddressInData(item, address));
@@ -227,12 +222,12 @@ function getTrackName(trackId: string | number | undefined): string {
   return trackMap[num] || `Track ${trackId}`;
 }
 
-function formatBalance(balance: string | number | undefined): string {
+function formatBalance(balance: string | number | undefined, tokenSymbol: string): string {
   if (!balance) return '';
   try {
     const planck = typeof balance === 'string' ? BigInt(balance) : BigInt(balance);
     const dot = Number(planck) / 1e12;
-    return dot >= 0.01 ? `${dot.toFixed(2)} DOT` : `${dot.toFixed(4)} DOT`;
+    return dot >= 0.01 ? `${dot.toFixed(2)} ${tokenSymbol}` : `${dot.toFixed(4)} ${tokenSymbol}`;
   } catch {
     return '';
   }
@@ -310,7 +305,7 @@ const governance: ActivityPlugin = {
     }
   },
 
-  async formatMessage(logEntry: any): Promise<string> {
+  async formatMessage(logEntry: any, tokenSymbol: string): Promise<string> {
     try {
       if (!logEntry || !logEntry.action) return 'Governance event occurred';
 
@@ -328,7 +323,7 @@ const governance: ActivityPlugin = {
           if (vote) {
             const voteType = vote.aye ? 'Aye' : 'Nay';
             const conviction = vote.conviction ? ` with ${vote.conviction}x conviction` : '';
-            const amount = vote.balance ? ` (${formatBalance(vote.balance)})` : '';
+            const amount = vote.balance ? ` (${formatBalance(vote.balance, tokenSymbol)})` : '';
             return `Voted ${voteType} on Referendum #${refId}${trackInfo}${conviction}${amount}${blockInfo}`;
           }
           return `Voted on Referendum #${refId}${trackInfo}${blockInfo}`;

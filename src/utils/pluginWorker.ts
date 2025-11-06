@@ -83,7 +83,7 @@ async function processPluginTask(task: {
     try {
       // Pass chainId and tokenSymbol
       const logEntry = await plugin.log(record, address, chainId, tokenSymbol);
-      const message = await plugin.formatMessage(logEntry);
+      const message = await plugin.formatMessage(logEntry, tokenSymbol);
 
       const notifications = plugins.notifications || [];
 

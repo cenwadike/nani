@@ -32,7 +32,8 @@ import fs from 'fs';
 import path from 'path';
 
 // Root directory for storing log files
-const LOG_ROOT = path.join(__dirname, '..', 'logs');
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const LOG_ROOT = path.join(PROJECT_ROOT, 'src', 'logs');
 
 /**
  * @function ensureDir

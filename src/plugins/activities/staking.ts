@@ -281,7 +281,7 @@ const staking: ActivityPlugin = {
     }
   },
 
-  async formatMessage(logEntry: any): Promise<string> {
+  async formatMessage(logEntry: any, tokenSymbol: string): Promise<string> {
     try {
       if (!logEntry || typeof logEntry.amount !== 'number') return 'Staking event occurred';
 
@@ -296,8 +296,8 @@ const staking: ActivityPlugin = {
       const blockInfo = blockNumber ? ` at block #${blockNumber}` : '';
 
       return direction === 'rewarded'
-        ? `Staking Reward: ${formattedAmount} DOT received from validator '${validatorName}'${validatorId}${eraInfo}${blockInfo}. Total era stake: ${totalStakeFormatted} DOT.`
-        : `Staking Slash: ${formattedAmount} DOT slashed by validator '${validatorName}'${validatorId}${eraInfo}${blockInfo}. Total era stake: ${totalStakeFormatted} DOT.`;
+        ? `Staking Reward: ${formattedAmount} ${tokenSymbol} received from validator '${validatorName}'${validatorId}${eraInfo}${blockInfo}. Total era stake: ${totalStakeFormatted} ${tokenSymbol}.`
+        : `Staking Slash: ${formattedAmount} ${tokenSymbol} slashed by validator '${validatorName}'${validatorId}${eraInfo}${blockInfo}. Total era stake: ${totalStakeFormatted} ${tokenSymbol}.`;
     } catch (err) {
       logger.error(`Error formatting staking message: ${err instanceof Error ? err.message : err}`);
       return 'Staking event occurred';

@@ -16,15 +16,20 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
       color: #fff;
+      overflow-x: hidden;
     }
 
     /* Hero Section */
     .hero {
       background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
-      padding: 60px 20px;
+      padding: clamp(40px, 8vw, 80px) 20px;
       text-align: center;
       position: relative;
       overflow: hidden;
+      min-height: 500px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .hero::before {
@@ -37,6 +42,7 @@
       background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
       background-size: 50px 50px;
       animation: grid-move 20s linear infinite;
+      opacity: 0.5;
     }
 
     @keyframes grid-move {
@@ -49,36 +55,41 @@
       z-index: 1;
       max-width: 900px;
       margin: 0 auto;
+      padding: 0 15px;
     }
 
     .hero h1 {
-      font-size: 3.5em;
+      font-size: clamp(2.2em, 6vw, 3.5em);
       margin-bottom: 20px;
       font-weight: 800;
       letter-spacing: -1px;
+      line-height: 1.1;
     }
 
     .hero .tagline {
-      font-size: 1.5em;
+      font-size: clamp(1.1em, 3vw, 1.5em);
       margin-bottom: 30px;
       opacity: 0.95;
+      line-height: 1.4;
     }
 
     .hero .badges {
       display: flex;
-      gap: 15px;
+      gap: 12px;
       justify-content: center;
       margin-bottom: 30px;
       flex-wrap: wrap;
+      padding: 0 10px;
     }
 
     .badge {
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
-      padding: 10px 20px;
+      padding: 8px 16px;
       border-radius: 25px;
-      font-size: 0.9em;
+      font-size: clamp(0.8em, 2vw, 0.9em);
       font-weight: 600;
+      white-space: nowrap;
     }
 
     .cta-buttons {
@@ -86,12 +97,13 @@
       gap: 15px;
       justify-content: center;
       flex-wrap: wrap;
+      padding: 0 10px;
     }
 
     .btn {
-      padding: 15px 35px;
+      padding: clamp(12px, 3vw, 15px) clamp(25px, 5vw, 35px);
       border-radius: 30px;
-      font-size: 1.1em;
+      font-size: clamp(0.95em, 2.5vw, 1.1em);
       font-weight: 700;
       border: none;
       cursor: pointer;
@@ -124,31 +136,33 @@
     /* Quick Start Section */
     .quick-start {
       background: #1a1a2e;
-      padding: 60px 20px;
+      padding: clamp(40px, 8vw, 80px) 20px;
     }
 
     .container {
       max-width: 1200px;
       margin: 0 auto;
+      padding: 0 15px;
     }
 
     .section-title {
-      font-size: 2.5em;
+      font-size: clamp(2em, 5vw, 2.5em);
       margin-bottom: 40px;
       text-align: center;
       color: #E6007A;
+      font-weight: 800;
     }
 
     .steps {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 30px;
+      grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+      gap: 25px;
       margin-bottom: 50px;
     }
 
     .step {
       background: rgba(255, 255, 255, 0.05);
-      padding: 30px;
+      padding: 25px;
       border-radius: 15px;
       border-left: 4px solid #E6007A;
       transition: all 0.3s ease;
@@ -157,10 +171,11 @@
     .step:hover {
       transform: translateY(-5px);
       background: rgba(230, 0, 122, 0.1);
+      box-shadow: 0 10px 30px rgba(230, 0, 122, 0.2);
     }
 
     .step-number {
-      font-size: 3em;
+      font-size: clamp(2.5em, 6vw, 3em);
       font-weight: 800;
       color: #E6007A;
       line-height: 1;
@@ -168,8 +183,13 @@
     }
 
     .step h3 {
-      font-size: 1.5em;
+      font-size: clamp(1.2em, 3vw, 1.5em);
       margin-bottom: 10px;
+    }
+
+    .step p {
+      font-size: clamp(0.9em, 2.5vw, 1em);
+      line-height: 1.5;
     }
 
     .step code {
@@ -178,20 +198,21 @@
       padding: 10px;
       border-radius: 5px;
       margin-top: 15px;
-      font-size: 0.85em;
+      font-size: clamp(0.75em, 2vw, 0.85em);
       overflow-x: auto;
+      white-space: nowrap;
     }
 
-    /* Features Grid */
+    /* Features Section */
     .features {
       background: #0a0a0a;
-      padding: 60px 20px;
+      padding: clamp(40px, 8vw, 80px) 20px;
     }
 
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 30px;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: 25px;
     }
 
     .feature-card {
@@ -199,17 +220,187 @@
       padding: 30px;
       border-radius: 15px;
       border: 1px solid rgba(230, 0, 122, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      border-color: #E6007A;
+      box-shadow: 0 15px 40px rgba(230, 0, 122, 0.3);
     }
 
     .feature-icon {
-      font-size: 2.5em;
+      font-size: clamp(2em, 5vw, 2.5em);
       margin-bottom: 15px;
+      display: block;
     }
 
     .feature-card h3 {
-      font-size: 1.3em;
+      font-size: clamp(1.1em, 3vw, 1.3em);
       margin-bottom: 10px;
       color: #E6007A;
+    }
+
+    .feature-card p {
+      font-size: clamp(0.9em, 2.5vw, 1em);
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    /* Marketplace Section */
+    .marketplace {
+      background: #1a1a2e;
+      padding: clamp(40px, 8vw, 80px) 20px;
+    }
+
+    .marketplace h1 {
+      font-size: clamp(2.2em, 6vw, 3em);
+      text-align: center;
+      margin-bottom: 50px;
+      background: linear-gradient(90deg, #E6007A, #552BBF);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 800;
+    }
+
+    .plugin-categories {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+      gap: 30px;
+      margin-bottom: 50px;
+    }
+
+    .category-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 20px;
+      padding: 30px;
+      border: 2px solid rgba(230, 0, 122, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .category-card:hover {
+      border-color: #E6007A;
+      background: rgba(230, 0, 122, 0.05);
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(230, 0, 122, 0.2);
+    }
+
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid rgba(230, 0, 122, 0.3);
+    }
+
+    .category-icon {
+      font-size: clamp(2em, 5vw, 2.5em);
+    }
+
+    .category-card h2 {
+      font-size: clamp(1.3em, 3.5vw, 1.6em);
+      color: #E6007A;
+      font-weight: 700;
+    }
+
+    .plugin-list {
+      list-style: none;
+    }
+
+    .plugin-item {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: clamp(0.9em, 2.5vw, 1em);
+    }
+
+    .plugin-item:last-child {
+      border-bottom: none;
+    }
+
+    .plugin-item::before {
+      content: '→';
+      color: #E6007A;
+      font-weight: bold;
+      font-size: 1.2em;
+    }
+
+    .plugin-item:hover {
+      color: #E6007A;
+      padding-left: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .community {
+      background: rgba(85, 43, 191, 0.1);
+      padding: 30px;
+      border-radius: 15px;
+      border: 1px solid rgba(85, 43, 191, 0.3);
+      margin-bottom: 40px;
+    }
+
+    .community h3 {
+      font-size: clamp(1.3em, 3.5vw, 1.6em);
+      color: #552BBF;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .contributor-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+      gap: 15px;
+    }
+
+    .contributor {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 15px;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: clamp(0.85em, 2.3vw, 0.95em);
+    }
+
+    .contributor a {
+      color: #E6007A;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .contributor a:hover {
+      text-decoration: underline;
+    }
+
+    .submit-btn {
+      display: block;
+      margin: 0 auto;
+      padding: clamp(14px, 3vw, 16px) clamp(30px, 5vw, 40px);
+      background: linear-gradient(135deg, #E6007A, #552BBF);
+      color: white;
+      font-weight: 700;
+      font-size: clamp(1em, 2.8vw, 1.2em);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(230, 0, 122, 0.4);
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 15px 40px rgba(230, 0, 122, 0.5);
+    }
+
+    /* Swagger Container */
+    #swagger-ui {
+      padding: clamp(40px, 8vw, 60px) 20px 0;
+      background: #0a0a0a;
     }
 
     /* Hide Swagger topbar */
@@ -236,23 +427,50 @@
       background: rgba(85, 43, 191, 0.05);
     }
 
-    /* Try It Out button styling */
     .swagger-ui .btn.try-out__btn {
       background: #E6007A;
       color: white;
       border: none;
     }
 
-    /* Responsive */
+    /* Responsive adjustments */
     @media (max-width: 768px) {
-      .hero h1 {
-        font-size: 2.5em;
+      .hero {
+        min-height: 400px;
       }
-      .hero .tagline {
-        font-size: 1.2em;
+
+      .steps {
+        gap: 20px;
       }
-      .cta-buttons {
-        flex-direction: column;
+
+      .feature-card,
+      .category-card {
+        padding: 25px;
+      }
+
+      .plugin-categories {
+        gap: 25px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero {
+        min-height: 350px;
+        padding: 30px 15px;
+      }
+
+      .badge {
+        padding: 6px 12px;
+        font-size: 0.75em;
+      }
+
+      .step {
+        padding: 20px;
+      }
+
+      .feature-card,
+      .category-card {
+        padding: 20px;
       }
     }
   </style>
@@ -265,10 +483,10 @@
       <p class="tagline">Real-Time Polkadot Event Streaming in 5 Minutes</p>
       
       <div class="badges">
-        <span class="badge">🔗 Multi-Chain</span>
-        <span class="badge">🔐 Bank-Grade Encryption</span>
-        <span class="badge">⚡ Sub-Second Latency</span>
-        <span class="badge">🚀 100K+ Tenants</span>
+        <span class="badge">Multi-Chain</span>
+        <span class="badge">Bank-Grade Encryption</span>
+        <span class="badge">Sub-Second Latency</span>
+        <span class="badge">100K+ Tenants</span>
       </div>
 
       <div class="cta-buttons">
@@ -281,7 +499,7 @@
   <!-- Quick Start Section -->
   <div class="quick-start" id="quick-start">
     <div class="container">
-      <h2 class="section-title">🚀 Quick Start</h2>
+      <h2 class="section-title">Quick Start</h2>
       
       <div class="steps">
         <div class="step">
@@ -314,7 +532,7 @@
       </div>
 
       <div style="text-align: center; margin-top: 40px;">
-        <a href="docs/" class="btn btn-primary">👇 Try Interactive API Docs Below</a>
+        <a href="docs/" class="btn btn-primary">Try Interactive API Docs</a>
       </div>
     </div>
   </div>
@@ -322,7 +540,7 @@
   <!-- Features Section -->
   <div class="features">
     <div class="container">
-      <h2 class="section-title">✨ Why Nani?</h2>
+      <h2 class="section-title">Why Nani?</h2>
       
       <div class="features-grid">
         <div class="feature-card">
@@ -332,7 +550,7 @@
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">⚡</div>
+          <div class="feature-icon">🛡️</div>
           <h3>PAPI-Powered Resilience</h3>
           <p>Built on Polkadot Cloud with automatic RPC failover, graceful reconnection, and multi-endpoint support.</p>
         </div>
@@ -344,7 +562,7 @@
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">🔐</div>
+          <div class="feature-icon">🔒</div>
           <h3>Security First</h3>
           <p>AES-256 encryption, JWT auth, rate limiting. Your data is encrypted at rest and secured in transit.</p>
         </div>
@@ -356,7 +574,7 @@
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">🚀</div>
+          <div class="feature-icon">⚡</div>
           <h3>Production Ready</h3>
           <p>Supports 100K+ tenants per node. Parallel notifications, async processing, PM2 clustering.</p>
         </div>
@@ -364,12 +582,94 @@
     </div>
   </div>
 
+  <!-- Marketplace Section -->
+  <div class="marketplace">
+    <div class="container">
+      <h1>Nani Plugin Marketplace</h1>
+      
+      <div class="plugin-categories">
+        <!-- Activities Category -->
+        <div class="category-card">
+          <div class="category-header">
+            <span class="category-icon">🎯</span>
+            <h2>Activities</h2>
+          </div>
+          <ul class="plugin-list">
+            <li class="plugin-item">Transfer Alerts</li>
+            <li class="plugin-item">Extrinsic Events</li>
+            <li class="plugin-item">OpenGov Events</li>
+            <li class="plugin-item">Staking Events</li>
+            <li class="plugin-item">XCM Tracking</li>
+            <li class="plugin-item">NFT Minting</li>
+          </ul>
+        </div>
+
+        <!-- Notifications Category -->
+        <div class="category-card">
+          <div class="category-header">
+            <span class="category-icon">🔔</span>
+            <h2>Notifications</h2>
+          </div>
+          <ul class="plugin-list">
+            <li class="plugin-item">Discord Webhooks</li>
+            <li class="plugin-item">Email Alerts</li>
+            <li class="plugin-item">SMS Notifications</li>
+            <li class="plugin-item">Telegram Bot</li>
+            <li class="plugin-item">Slack Integration</li>
+            <li class="plugin-item">Webhook Push</li>
+          </ul>
+        </div>
+
+        <!-- Analytics Category -->
+        <div class="category-card">
+          <div class="category-header">
+            <span class="category-icon">📈</span>
+            <h2>Analytics</h2>
+          </div>
+          <ul class="plugin-list">
+            <li class="plugin-item">Basic Metrics</li>
+            <li class="plugin-item">Yield Tracking</li>
+            <li class="plugin-item">PnL Calculator</li>
+            <li class="plugin-item">Volume Analysis</li>
+            <li class="plugin-item">Trend Reports</li>
+            <li class="plugin-item">Portfolio Insights</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Community Contributions -->
+      <div class="community">
+        <h3>🌟 Community Contributions</h3>
+        <div class="contributor-list">
+          <div class="contributor">
+            <span>discord-webhook</span>
+            <a href="https://github.com/cenwadike" target="_blank">@cenwadike</a>
+          </div>
+          <div class="contributor">
+            <span>open-gov</span>
+            <a href="https://github.com/cenwadike" target="_blank">@cenwadike</a>
+          </div>
+          <div class="contributor">
+            <span>extrinsic</span>
+            <a href="https://github.com/cenwadike" target="_blank">@cenwadike</a>
+          </div>
+        </div>
+      </div>
+
+      <button class="submit-btn">
+        <a href='https://github.com/cenwadike/nani/issues/new' class="btn btn-secondary" target="_blank">Submit Your Plugin</a>
+      </button>
+    </div>
+  </div>
+
+  <!-- Swagger UI Container -->
+  <div id="swagger-ui"></div>
+
   <!-- Swagger UI Scripts -->
   <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-bundle.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-standalone-preset.js"></script>
   <script>
     window.onload = function() {
-      // Fetch OpenAPI spec and render Swagger UI
       fetch('/openapi.json')
         .then(response => response.json())
         .then(spec => {
@@ -395,17 +695,14 @@
 
           window.ui = ui;
 
-          // Auto-scroll to API docs when clicking "Try API" button
-          const urlHash = window.location.hash;
-          if (urlHash === 'docs/') {
+          if (window.location.hash === '#docs' || window.location.hash === '#swagger-ui') {
             setTimeout(() => {
-              document.getElementById('docs').scrollIntoView({ behavior: 'smooth' });
+              document.querySelector('#swagger-ui').scrollIntoView({ behavior: 'smooth' });
             }, 500);
           }
         });
     };
 
-    // Smooth scroll for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
         e.preventDefault();

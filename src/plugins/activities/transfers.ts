@@ -27,9 +27,8 @@
  * @description Filters `balances.Transfer` events, logs relevant data, and formats messages
  *              for notification dispatch. Supports both incoming and outgoing transfers.
  */
-// SPDX-License-Identifier: MIT
-// plugins/activities/transfers.ts
 
+import { formatDistanceToNow } from 'date-fns';
 import { ActivityPlugin } from '../../types/pluginTypes';
 
 const transfers: ActivityPlugin = {
@@ -78,12 +77,17 @@ const transfers: ActivityPlugin = {
   /** --------------------------------------------------------------
    *  MESSAGE – human readable notification
    *  -------------------------------------------------------------- */
-  formatMessage(logEntry: any): string {
-    const { direction, amount, token, from, to } = logEntry;
+  formatMessage(logEntry: any, tokenSymbol: string): string {
+    const { direction, amount, token, from, to, timestamp } = logEntry;
     const other = direction === 'outgoing' ? to : from;
-    const amountFmt = (amount / 1e12).toFixed(4); // planck → token
+    const shortAddr = `${other.slice(0, 12)}...`;
+    const prettyAmount = (amount / 1e12).toFixed(4).replace(/\.?0+$/, ''); // strip trailing zeros
+    const timeAgo = formatDistanceToNow(new Date(timestamp), { addSuffix: true });
 
-    return `${direction.toUpperCase()} Transfer: ${amountFmt} ${token} ${direction === 'outgoing' ? 'to' : 'from'} ${other}...`;
+    const icon = direction === 'incoming' ? '💰' : '💸';
+    const arrow = direction === 'incoming' ? 'from' : 'to';
+
+    return `${icon} ${direction.toUpperCase()} Transfer: ${prettyAmount} ${token} ${arrow} ${shortAddr} ${timeAgo}`;
   },
 };
 
