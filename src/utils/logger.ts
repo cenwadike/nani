@@ -27,88 +27,56 @@
  * @description Captures structured log entries and stores them in daily log files
  *              organized by month. Supports info, error, and event-level logging.
  */
-
+// src/utils/logger.ts
 import fs from 'fs';
 import path from 'path';
+import { LOG_ROOT } from './paths';
 
-// Root directory for storing log files
-const PROJECT_ROOT = path.resolve(__dirname, '../../..');
-const LOG_ROOT = path.join(PROJECT_ROOT, 'src', 'logs');
+const FALLBACK = '/tmp/nani-logs';
 
-/**
- * @function ensureDir
- * @description Creates the log directory if it doesn't exist.
- * @param dir - Absolute path to the directory
- */
-function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+function getLogRoot() {
+  try {
+    fs.accessSync(LOG_ROOT, fs.constants.W_OK);
+    return LOG_ROOT;
+  } catch {
+    fs.mkdirSync(FALLBACK, { recursive: true });
+    console.warn(`[logger] No write access to ${LOG_ROOT}, using ${FALLBACK}`);
+    return FALLBACK;
   }
 }
 
-/**
- * @function timestamp
- * @description Returns the current timestamp in ISO format.
- * @returns {string} ISO-formatted timestamp
- */
-function timestamp(): string {
+function ensure(dir: string) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+  }
+}
+
+function timestamp() {
   return new Date().toISOString();
 }
 
-/**
- * @function writeLog
- * @description Writes a log entry to the appropriate daily file.
- *              Organizes logs into folders by month and files by day.
- * @param type - Log level (e.g., 'info', 'error', 'event')
- * @param message - Log message content
- */
-function writeLog(type: string, message: string) {
+function writeLog(level: string, message: string) {
+  const root = getLogRoot();
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const day = String(now.getDate()).padStart(2, '0');
 
-  const folder = path.join(LOG_ROOT, `${year}-${month}`);
-  ensureDir(folder);
+  const dir = path.join(root, month);
+  ensure(dir);
 
-  const file = path.join(folder, `${day}.log`);
-  const entry = `[${timestamp()}] [${type.toUpperCase()}] ${message}\n`;
+  const file = path.join(dir, `${day}.log`);
+  const line = `[${timestamp()}] [${level.toUpperCase()}] ${message}\n`;
 
-  fs.appendFile(file, entry, (err) => {
-    if (err) console.error('Failed to write log:', err.message);
-  });
+  try {
+    fs.appendFileSync(file, line);
+  } catch (err) {
+    console.error('[logger] FATAL - could not write log:', err);
+  }
 }
 
-/**
- * @exports logger
- * @description Provides structured logging methods for different log levels.
- */
 export default {
-  /**
-   * @function info
-   * @description Logs an informational message.
-   * @param msg - Message to log
-   */
   info: (msg: string) => writeLog('info', msg),
-
-  /**
-   * @function warn
-   * @description Logs a warning message.
-   * @param msg - Message to log
-   */
   warn: (msg: string) => writeLog('warn', msg),
-
-  /**
-   * @function error
-   * @description Logs an error message.
-   * @param msg - Message to log
-   */
   error: (msg: string) => writeLog('error', msg),
-
-  /**
-   * @function event
-   * @description Logs a blockchain or plugin event.
-   * @param msg - Message to log
-   */
   event: (msg: string) => writeLog('event', msg),
 };

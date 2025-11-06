@@ -34,16 +34,22 @@ import CryptoJS from 'crypto-js';
 import config from '../config';
 import logger from './logger';
 import { promises as fsPromises } from 'fs';
+import { DATA_ROOT } from './paths';
+import { get } from 'http';
 
 // ──────────────────────────────────────────────────────────────────────
 //  DATA ROOT
 // ──────────────────────────────────────────────────────────────────────
-const PROJECT_ROOT = path.resolve(__dirname, '../../..');
-const DATA_ROOT = path.join(PROJECT_ROOT, 'src', 'data');
-
-if (!fs.existsSync(DATA_ROOT)) {
-  fs.mkdirSync(DATA_ROOT, { recursive: true });
-  logger.info(`Created data root: ${DATA_ROOT}`);
+function getDataRoot() {
+  try {
+    fs.accessSync(DATA_ROOT, fs.constants.W_OK);
+    return DATA_ROOT;
+  } catch {
+    const tmp = '/tmp/nani-data';
+    fs.mkdirSync(tmp, { recursive: true });
+    logger.warn(`Data directory not writable, using ${tmp}`);
+    return tmp;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -61,7 +67,7 @@ const decrypt = (encrypted: string): any => {
 //  TENANT + CHAIN DIRECTORY
 // ──────────────────────────────────────────────────────────────────────
 const getChainDir = (tenantId: string, chainId: string): string => {
-  const dir = path.join(DATA_ROOT, tenantId, chainId);
+  const dir = path.join(getDataRoot(), tenantId, chainId);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     logger.info(`Created chain dir: ${dir}`);
@@ -70,7 +76,7 @@ const getChainDir = (tenantId: string, chainId: string): string => {
 };
 
 const getTenantDir = (tenantId: string): string => {
-  const dir = path.join(DATA_ROOT, tenantId);
+  const dir = path.join(getDataRoot(), tenantId);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     logger.info(`Created tenant dir: ${dir}`);
@@ -95,7 +101,7 @@ export const loadChainConfig = async (
   tenantId: string,
   chainId: string
 ): Promise<any | null> => {
-  const file = path.join(DATA_ROOT, tenantId, chainId, 'config.json');
+  const file = path.join(getDataRoot(), tenantId, chainId, 'config.json');
   if (!fs.existsSync(file)) return null;
   const data = await fsPromises.readFile(file, 'utf8');
   return decrypt(data);
@@ -180,12 +186,12 @@ export const loadLogs = async (tenantId: string): Promise<any[]> => {
 //  TENANTS
 // ──────────────────────────────────────────────────────────────────────
 export const getAllTenants = async (): Promise<string[]> => {
-  if (!fs.existsSync(DATA_ROOT)) return [];
-  const entries = await fsPromises.readdir(DATA_ROOT);
+  if (!fs.existsSync(getDataRoot())) return [];
+  const entries = await fsPromises.readdir(getDataRoot());
   const tenants = (
     await Promise.all(
       entries.map(async (e) => {
-        const stat = await fsPromises.stat(path.join(DATA_ROOT, e));
+        const stat = await fsPromises.stat(path.join(getDataRoot(), e));
         return stat.isDirectory() ? e : null;
       })
     )

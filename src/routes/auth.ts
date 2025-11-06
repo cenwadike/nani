@@ -40,11 +40,12 @@ import logger from '../utils/logger';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import CryptoJS from 'crypto-js';
+import { DATA_ROOT } from '../utils/paths';
 
 const router = Router();
 
 // ──────────────────────────────────────────────────────────────────────
-// TENANT METADATA (ENCRYPTED) - REPLACE THE OLD ONES
+// TENANT METADATA (ENCRYPTED)
 // ──────────────────────────────────────────────────────────────────────
 
 const encrypt = (data: any): string =>
@@ -58,15 +59,12 @@ const decrypt = (encrypted: string): any => {
 };
 
 const getTenantMetadataPath = (tenantId: string): string => {
-  const PROJECT_ROOT = path.resolve(__dirname, '../../..');
-  const DATA_ROOT = path.join(PROJECT_ROOT, 'src', 'data');
   return path.join(DATA_ROOT, tenantId, 'tenant.json.enc'); // note .enc extension
 };
 
 const saveTenantMetadata = async (tenantId: string, data: any): Promise<void> => {
   const file = getTenantMetadataPath(tenantId);
-  const dir = path.dirname(file);
-  await fsPromises.mkdir(dir, { recursive: true });
+  await fsPromises.mkdir(`${DATA_ROOT}/${tenantId}`, { recursive: true });
   const encrypted = encrypt(data);
   await fsPromises.writeFile(file, encrypted, 'utf8');
   logger.info(`Encrypted tenant metadata saved → ${file}`);

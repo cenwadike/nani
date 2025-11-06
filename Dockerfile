@@ -1,35 +1,35 @@
 # ============= DEPENDENCIES STAGE (CACHED) =============
 FROM node:24-alpine AS deps
+
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nani -u 1001
+
 WORKDIR /app
 
-# Make npm resilient to network flakes
+# Make npm resilient
 RUN npm config set fetch-retries 5 && \
     npm config set fetch-retry-mintimeout 20000 && \
     npm config set fetch-timeout 180000 && \
     npm config set prefer-offline true
 
-# Copy only package files first (maximizes cache)
 COPY package*.json ./
 
-# Install ALL deps (dev + prod) — works even without package-lock.json
-RUN npm i --legacy-peer-deps --no-audit --prefer-offline || \
-    npm i --legacy-peer-deps --no-audit
+# Install ALL dependencies (including typescript!)
+RUN npm i --legacy-peer-deps --no-audit
 
 
 # ============= BUILD STAGE =============
 FROM node:24-alpine AS builder
 WORKDIR /app
 
-# Reuse installed node_modules from deps stage
+# Reuse node_modules from deps (has typescript!)
 COPY --from=deps /app/node_modules ./node_modules
 COPY package*.json tsconfig.json ./
-
-# Copy source code
 COPY src ./src
 COPY public ./public
 COPY swagger.yaml ./
 
-# Build the app
+# Now tsc is available → build succeeds
 RUN npm run build
 
 
@@ -37,22 +37,15 @@ RUN npm run build
 FROM node:24-alpine AS prod-deps
 WORKDIR /app
 
-RUN npm config set fetch-retries 5 && \
-    npm config set fetch-timeout 180000 && \
-    npm config set prefer-offline true
-
 COPY package*.json ./
-
-# Install ONLY production deps — no lockfile needed
-RUN npm i --legacy-peer-deps --no-audit --omit=dev --prefer-offline || \
-    npm i --legacy-peer-deps --no-audit --omit=dev && \
+# Install only prod deps (typescript removed → smaller image)
+RUN npm i --legacy-peer-deps --no-audit --omit=dev && \
     npm cache clean --force
 
 
 # ============= FINAL RUNTIME IMAGE =============
 FROM node:24-alpine
 
-# Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nani -u 1001
 
@@ -66,11 +59,10 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/swagger.yaml ./swagger.yaml
 COPY --from=builder /app/public ./public
 
-# Create persistent directories and fix permissions
-RUN mkdir -p ./src/data ./src/logs && \
-    chown -R nani:nodejs ./src/data ./src/logs
+# Create volumes as root, then give to nani
+RUN mkdir -p /app/data /app/logs && \
+    chown -R nani:nodejs /app/data /app/logs
 
-# Switch to non-root user
 USER nani
 
 EXPOSE 3000
