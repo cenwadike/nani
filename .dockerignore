@@ -5,3 +5,9 @@ Dockerfile
 *.md
 tests/
 data/
+logs/
+dist
+.git
+.env*
+.vscode
+.idea

@@ -4,8 +4,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - ./data:/src/data
+      - ./logs:/src/logs
     env_file:
       - .env
     restart: always
