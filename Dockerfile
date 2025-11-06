@@ -78,4 +78,4 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Smart entrypoint: works whether you use cluster or not
-CMD ["sh", "-c", "test -f dist/src/cluster.js && node dist/src/cluster.js || node dist/src/index.js"]
+CMD ["sh", "-c", "test -f dist/src/cluster.js && node dist/src/cluster.js || node dist/cluster.js"]
