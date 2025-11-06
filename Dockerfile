@@ -77,5 +77,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Smart entrypoint: works whether you use cluster or not
-CMD ["sh", "-c", "test -f dist/src/cluster.js && node dist/src/cluster.js || node dist/cluster.js"]
+CMD ["node", "dist/cluster.js"]
