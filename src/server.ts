@@ -59,7 +59,7 @@ function startServer(): Promise<void> {
       // Capture the server instance
       serverInstance = app.listen(port, '0.0.0.0', () => {
         logger.info(`Worker ${process.pid} listening on 0.0.0.0:${port}`);
-        resolve();
+        resolve(); // Resolve the promise once listening
       });
 
       // Handle server errors (e.g., address already in use)
