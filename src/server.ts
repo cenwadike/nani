@@ -38,6 +38,7 @@ import logger from './utils/logger';
 import { ChainConfig } from './config';
 import { startReferendumCacheCleanup } from './plugins/activities/governance';
 import { startValidatorCacheCleanup } from './plugins/activities/staking';
+import { ensurePluginsLoaded } from './utils/pluginRegistry';
 
 const numCores = os.cpus().length;
 const pool = workerpool.pool(__dirname + '/utils/pluginWorker.ts', { maxWorkers: numCores });
@@ -45,7 +46,8 @@ const pool = workerpool.pool(__dirname + '/utils/pluginWorker.ts', { maxWorkers:
 let isMonitoring = false;
 
 const port = config.port;
-app.listen(port, () => {
+ensurePluginsLoaded();
+app.listen(port, '0.0.0.0', () => {
   logger.info(`Worker ${process.pid} listening on port ${port}`);
 });
 
