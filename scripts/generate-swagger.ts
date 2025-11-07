@@ -13,7 +13,7 @@ const options = {
     },
     servers: [
       { url: 'http://localhost:3000', description: 'Local' },
-      { url: 'https://nani-demo.railway.app', description: 'Production' }
+      { url: 'https://nani-production-c105.up.railway.app', description: 'Production' }
     ]
   },
   apis: [

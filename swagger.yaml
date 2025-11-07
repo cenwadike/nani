@@ -6,7 +6,7 @@ info:
 servers:
   - url: 'http://localhost:3000'
     description: 🏠 Local Development
-  - url: 'https://nani-demo.railway.app'
+  - url: 'https://nani-production-c105.up.railway.app'
     description: 🌐 Live Production Server
 
 tags:
