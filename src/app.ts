@@ -16,8 +16,7 @@ import logger from './utils/logger';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import path from 'path';
-
-const swaggerDocument = YAML.load('./swagger.yaml');
+import fs from 'fs';
 
 const app: Application = express();
 
@@ -475,44 +474,21 @@ const swaggerOptions = {
   customfavIcon: "https://polkadot.network/favicon.ico",
   
   swaggerOptions: {
-    // Keep JWT token between page reloads
     persistAuthorization: true,
-    
-    // Show request duration
     displayRequestDuration: true,
-    
-    // Enable filtering endpoints
     filter: true,
-    
-    // Default to "Try it out" enabled
     tryItOutEnabled: true,
-    
-    // Expand models by default
     defaultModelsExpandDepth: 3,
     defaultModelExpandDepth: 3,
-    
-    // Show operation ID
     displayOperationId: false,
-    
-    // Default expand level for tags
-    docExpansion: 'list', // 'list' | 'full' | 'none'
-    
-    // Enable deep linking to operations
+    docExpansion: 'list',
     deepLinking: true,
-    
-    // Show extensions
     showExtensions: true,
-    
-    // Show common extensions
     showCommonExtensions: true,
-    
-    // Syntax highlighting theme
     syntaxHighlight: {
       activate: true,
-      theme: 'monokai', // Matches dark Polkadot theme
+      theme: 'monokai',
     },
-    
-    // Request snippets (show curl, JavaScript, etc.)
     requestSnippetsEnabled: true,
     requestSnippets: {
       generators: {
@@ -530,129 +506,84 @@ const swaggerOptions = {
         }
       },
       defaultExpanded: true,
-      languages: null // Use all available
+      languages: null
     },
-    
-    // Validator URL (disable for offline/local)
     validatorUrl: null,
-    
-    // Pre-authorize with example token (for demo purposes)
-    // onComplete: () => {
-    //   console.log('Swagger UI loaded successfully');
-    // }
   }
 };
 
-/**
- * @route GET /docs
- * @description Interactive API documentation powered by Swagger UI.
- * @tags System
- *
- * @openapi
- * /docs:
- *   get:
- *     summary: API Documentation (Swagger UI)
- *     description: |
- *       Interactive documentation for all Nani API endpoints.
- *       - Auto-generated from JSDoc `@openapi` annotations
- *       - Try-it-out functionality
- *       - Custom styling: topbar hidden
- *     tags:
- *       - System
- *     responses:
- *       '200':
- *         description: Swagger UI HTML page
- *         content:
- *           text/html:
- *             schema:
- *               type: string
- *               format: binary
- *             example: |
- *               <!DOCTYPE html>
- *               <html>...<head><title>Nani API Docs</title>...</html>
- */
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerOptions));
+// CRITICAL FIX: Load swagger.yaml with proper error handling
+let swaggerDocument: any = null;
+const swaggerPath = path.join(__dirname, '../swagger.yaml');
 
-/**
- * @route GET /{filepath*}
- * @description Serves static assets from the `public/` directory.
- * @tags System
- *
- * @openapi
- * /{filepath*}:
- *   get:
- *     summary: Static Assets
- *     description: |
- *       Serves files from the `public/` directory:
- *       - `index.html` (root)
- *       - `favicon.ico`
- *       - `styles.css`, images, etc.
- *     tags:
- *       - System
- *     parameters:
- *       - in: path
- *         name: filepath
- *         schema:
- *           type: string
- *         required: true
- *         description: Path to static file (e.g. `index.html`, `logo.png`)
- *         example: index.html
- *     responses:
- *       '200':
- *         description: Static file served
- *         content:
- *           text/html:
- *             schema:
- *               type: string
- *               format: binary
- *       '404':
- *         description: File not found
- */
+const MAX_RETRIES = 10;
+const BACKOFF_FACTOR = 1.5;
+let delay = 1000;
+let lastError: any = null;
+
+(async () => {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (!fs.existsSync(swaggerPath)) {
+        throw new Error(`swagger.yaml not found at ${swaggerPath}`);
+      }
+
+      logger.info(`Attempt ${attempt}: Loading swagger.yaml from ${swaggerPath}`);
+      const document = YAML.load(swaggerPath);
+
+      if (!document || typeof document !== 'object') {
+        throw new Error('Loaded swagger.yaml is empty or invalid');
+      }
+
+      logger.info(`swagger.yaml loaded successfully on attempt ${attempt}`);
+      swaggerDocument = document;
+      break;
+    } catch (error: any) {
+      lastError = error;
+      logger.warn(`Attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`);
+
+      if (attempt < MAX_RETRIES) {
+        logger.info(`Retrying in ${delay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay = Math.min(delay * BACKOFF_FACTOR, 10000); // Cap at 10s
+      }
+    }
+  }
+
+  if (!swaggerDocument) {
+    logger.error(`Failed to load swagger.yaml after ${MAX_RETRIES} attempts: ${(lastError as Error).message}`);
+  }
+})();
+
+// Only mount docs if swagger loaded successfully
+if (swaggerDocument) {
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerOptions));
+  logger.info('Swagger UI mounted at /docs');
+} else {
+  app.get('/docs', (req, res) => {
+    res.status(500).json({ error: 'API documentation unavailable' });
+  });
+  logger.warn('Swagger UI not available - swagger.yaml failed to load');
+}
+
 app.use(express.static('public'));
 
-/**
- * @route GET /openapi.json
- * @description Raw OpenAPI 3.1 specification in JSON format.
- * @tags System
- *
- * @openapi
- * /openapi.json:
- *   get:
- *     summary: OpenAPI Specification (JSON)
- *     description: |
- *       Machine-readable OpenAPI 3.1 document.
- *       Used by:
- *       - Swagger UI
- *       - Codegen tools (TypeScript, Python, etc.)
- *       - API gateways
- *     tags:
- *       - System
- *     produces:
- *       - application/json
- *     responses:
- *       '200':
- *         description: OpenAPI 3.1 JSON document
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               additionalProperties: true
- *             example:
- *               openapi: "3.1.0"
- *               info:
- *                 title: "Nani – Polkadot Event Streaming Service"
- *                 version: "1.0.0"
- *               paths:
- *                 /auth:
- *                   post: ...
- */
-// Serve OpenAPI spec as JSON
 app.get('/openapi.json', (req, res) => {
-  res.sendFile(path.join(__dirname, '../swagger.yaml'));
+  const yamlPath = path.join(__dirname, '../swagger.yaml');
+  if (fs.existsSync(yamlPath)) {
+    res.sendFile(yamlPath);
+  } else {
+    res.status(404).json({ error: 'OpenAPI spec not found' });
+  }
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  const indexPath = path.join(__dirname, '../public/index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Index page not found');
+  }
 });
 
 app.use(errorHandler);

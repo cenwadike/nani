@@ -60,8 +60,20 @@ if (cluster.isPrimary) {
     }
   });
 } else {
+  logger.info(`Worker ${process.pid} starting...`);
+  
   import('./server').catch((err) => {
-    logger.error(`Worker ${process.pid} failed to start server: ${err.message}`);
+    logger.error(`Worker ${process.pid} CRITICAL IMPORT FAILURE:`);
+    logger.error(`Error message: ${err.message}`);
+    logger.error(`Error name: ${err.name}`);
+    logger.error(`Stack trace: ${err.stack}`);
+    
+    // Log the current directory and available files
+    const fs = require('fs');
+    const path = require('path');
+    logger.error(`Current __dirname: ${__dirname}`);
+    logger.error(`Files in dist/: ${fs.readdirSync(path.join(__dirname, '../')).join(', ')}`);
+    
     process.exit(1);
   });
 }
