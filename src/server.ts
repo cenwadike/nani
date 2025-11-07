@@ -44,52 +44,66 @@ const numCores = os.cpus().length;
 const pool = workerpool.pool(__dirname + '/utils/pluginWorker.js', { maxWorkers: numCores });
 
 let isMonitoring = false;
+let serverInstance: any = null;
 
-(async () => {
-  try {
-    // 1. Load plugins FIRST
-    logger.info(`Worker ${process.pid} loading plugins...`);
-    ensurePluginsLoaded();
-    logger.info(`Worker ${process.pid} plugins loaded successfully`);
+function startServer(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      // 1. Load plugins FIRST
+      logger.info(`Worker ${process.pid} loading plugins...`);
+      ensurePluginsLoaded();
+      logger.info(`Worker ${process.pid} plugins loaded successfully`);
 
-    // 2. THEN start HTTP server
-    const port = config.port;
-    const server = app.listen(port, '0.0.0.0', () => {
-      logger.info(`Worker ${process.pid} listening on 0.0.0.0:${port}`);
-    });
-
-    // 3. Handle server errors
-    server.on('error', (error: any) => {
-      logger.error(`Worker ${process.pid} server error: ${error.message}`);
-      process.exit(1);
-    });
-
-    // 4. Listen for monitoring assignments from primary
-    process.on('message', (msg: any) => {
-      if (msg?.type === 'start-monitoring' && msg?.payload) {
-        const chain: ChainConfig = JSON.parse(msg.payload);
-        if (!isMonitoring) {
-          logger.info(`Worker ${process.pid} received monitoring assignment for ${chain.name}`);
-          startMonitoring(chain);
-        }
-      }
-    });
-
-    // 5. Graceful shutdown
-    process.on('SIGTERM', async () => {
-      logger.info(`Worker ${process.pid} received SIGTERM, shutting down gracefully...`);
-      server.close(() => {
-        logger.info(`Worker ${process.pid} HTTP server closed`);
-        pool.terminate();
-        process.exit(0);
+      // 2. THEN start HTTP server
+      const port = config.port;
+      // Capture the server instance
+      serverInstance = app.listen(port, '0.0.0.0', () => {
+        logger.info(`Worker ${process.pid} listening on 0.0.0.0:${port}`);
+        resolve(); // Resolve the promise once listening
       });
-    });
 
+      // 3. Handle server errors
+      serverInstance.on('error', (error: any) => {
+        logger.error(`Worker ${process.pid} server error: ${error.message}`);
+        reject(error); // Reject the promise on error
+        process.exit(1);
+        });
+
+      // 4. Listen for monitoring assignments from primary
+      process.on('message', (msg: any) => {
+        if (msg?.type === 'start-monitoring' && msg?.payload) {
+          const chain: ChainConfig = JSON.parse(msg.payload);
+          if (!isMonitoring) {
+            logger.info(`Worker ${process.pid} received monitoring assignment for ${chain.name}`);
+            startMonitoring(chain);
+          }
+        }
+      });
+
+      // 5. Graceful shutdown
+      process.on('SIGTERM', async () => {
+        logger.info(`Worker ${process.pid} received SIGTERM, shutting down gracefully...`);
+        serverInstance.close(() => {
+          logger.info(`Worker ${process.pid} HTTP server closed`);
+          pool.terminate();
+          process.exit(0);
+        });
+      });
   } catch (error: any) {
     logger.error(`Worker ${process.pid} startup failed: ${error.message}`);
     logger.error(`Stack trace: ${error.stack}`);
     process.exit(1);
   }
+  });
+}
+
+(async () => {
+    try {
+        await startServer();
+    } catch (error) {
+        logger.error(`Server startup failed outside of promise: ${error}`);
+        process.exit(1);
+    }
 })();
 
 async function startMonitoring(chain: ChainConfig) {
