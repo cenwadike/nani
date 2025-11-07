@@ -59,15 +59,15 @@ function startServer(): Promise<void> {
       // Capture the server instance
       serverInstance = app.listen(port, '0.0.0.0', () => {
         logger.info(`Worker ${process.pid} listening on 0.0.0.0:${port}`);
-        resolve(); // Resolve the promise once listening
+        resolve();
       });
 
-      // 3. Handle server errors
+      // Handle server errors (e.g., address already in use)
       serverInstance.on('error', (error: any) => {
         logger.error(`Worker ${process.pid} server error: ${error.message}`);
-        reject(error); // Reject the promise on error
+        reject(error); // <-- Reject the promise on error
         process.exit(1);
-        });
+      });
 
       // 4. Listen for monitoring assignments from primary
       process.on('message', (msg: any) => {
