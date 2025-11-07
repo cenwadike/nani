@@ -60,5 +60,8 @@ if (cluster.isPrimary) {
     }
   });
 } else {
-  require('./server');
+  import('./server').catch((err) => {
+    logger.error(`Worker ${process.pid} failed to start server: ${err.message}`);
+    process.exit(1);
+  });
 }
