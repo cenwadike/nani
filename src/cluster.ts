@@ -49,7 +49,10 @@ if (cluster.isPrimary) {
   logger.info(`Forking ${CHAINS.length} monitoring workers`);
   CHAINS.forEach(() => cluster.fork());
 
-  cluster.on('exit', () => cluster.fork());
+  cluster.on('exit', (worker, code, signal) => {
+    logger.warn(`Worker ${worker.process.pid} died (${signal || code}). Restarting...`);
+    cluster.fork(); // Always ensure workers are running
+  });
 
   cluster.on('online', (worker) => {
     const freeChain = CHAINS.find(c => !c.assignedWorkerId);
@@ -59,6 +62,11 @@ if (cluster.isPrimary) {
       logger.event(`Assigned worker ${worker.process.pid} → ${freeChain.name}`);
     }
   });
+
+  setInterval(() => {
+    // This empty interval keeps the Node.js event loop active
+    // and prevents the primary process from exiting normally.
+  }, 1000 * 60 * 60); // Check in every hour, just to keep loop open.
 } else {
   logger.info(`Worker ${process.pid} starting...`);
   
