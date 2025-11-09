@@ -27,7 +27,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package*.json tsconfig.json ./
 COPY src ./src
 COPY public ./public
-COPY swagger.yaml ./swagger.yaml
+COPY swagger.yaml ./
 
 # Now tsc is available → build succeeds
 RUN npm run build
@@ -56,7 +56,7 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 
 # Copy built app
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/swagger.yaml ./swagger.yaml
+COPY --from=builder /app/dist/swagger.yaml ./dist/swagger.yaml
 COPY --from=builder /app/public ./public
 
 # Create volumes as root, then give to nani
@@ -69,5 +69,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# CMD ["node", "dist/cluster.js"]
-CMD [ "node", "dist/server.js" ]
+CMD ["node", "dist/entrypoint.js"]

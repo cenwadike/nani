@@ -23,11 +23,11 @@
 
 /**
  * @file server.ts
- * @summary Starts the Express server and event monitoring engine.
- * @description This file sets up the HTTP server, and starts 
- *              blockchain event monitoring using Polkadot API (PAPI).
+ * @summary Starts HTTP server + blockchain monitoring (universal: cluster & single process)
  */
 
+// src/server.ts
+import cluster from 'cluster';
 import app from './app';
 import config from './config';
 import { getApi } from './utils/papi';
@@ -35,7 +35,7 @@ import storage from './utils/storage';
 import workerpool from 'workerpool';
 import os from 'os';
 import logger from './utils/logger';
-import { ChainConfig } from './config';
+import { ChainConfig, CHAINS } from './config';
 import { startReferendumCacheCleanup } from './plugins/activities/governance';
 import { startValidatorCacheCleanup } from './plugins/activities/staking';
 import { ensurePluginsLoaded } from './utils/pluginRegistry';
@@ -43,95 +43,49 @@ import { ensurePluginsLoaded } from './utils/pluginRegistry';
 const numCores = os.cpus().length;
 const pool = workerpool.pool(__dirname + '/utils/pluginWorker.js', { maxWorkers: numCores });
 
-let isMonitoring = false;
 let serverInstance: any = null;
+let monitoringStarted = new Set<string>();
 
-function startServer(): Promise<void> {
+function startHttpServer(): Promise<void> {
   return new Promise((resolve, reject) => {
-    try {
-      // 1. Load plugins FIRST
-      logger.info(`Worker ${process.pid} loading plugins...`);
-      ensurePluginsLoaded();
-      logger.info(`Worker ${process.pid} plugins loaded successfully`);
+    const port = config.port;
+    serverInstance = app.listen(port, '0.0.0.0', () => {
+      logger.info(`HTTP server LIVE on http://localhost:${port} (PID: ${process.pid})`);
+      resolve();
+    });
 
-      // 2. THEN start HTTP server
-      const port = config.port;
-      // Capture the server instance
-      serverInstance = app.listen(port, '0.0.0.0', () => {
-        logger.info(`Worker ${process.pid} listening on 0.0.0.0:${port}`);
-        resolve(); // Resolve the promise once listening
-      });
-
-      // Handle server errors (e.g., address already in use)
-      serverInstance.on('error', (error: any) => {
-        logger.error(`Worker ${process.pid} server error: ${error.message}`);
-        reject(error); // <-- Reject the promise on error
-        process.exit(1);
-      });
-
-      // 4. Listen for monitoring assignments from primary
-      process.on('message', (msg: any) => {
-        if (msg?.type === 'start-monitoring' && msg?.payload) {
-          const chain: ChainConfig = JSON.parse(msg.payload);
-          if (!isMonitoring) {
-            logger.info(`Worker ${process.pid} received monitoring assignment for ${chain.name}`);
-            startMonitoring(chain);
-          }
-        }
-      });
-
-      // 5. Graceful shutdown
-      process.on('SIGTERM', async () => {
-        logger.info(`Worker ${process.pid} received SIGTERM, shutting down gracefully...`);
-        serverInstance.close(() => {
-          logger.info(`Worker ${process.pid} HTTP server closed`);
-          pool.terminate();
-          process.exit(0);
-        });
-      });
-  } catch (error: any) {
-    logger.error(`Worker ${process.pid} startup failed: ${error.message}`);
-    logger.error(`Stack trace: ${error.stack}`);
-    process.exit(1);
-  }
+    serverInstance.on('error', (err: any) => {
+      logger.error(`Server error: ${err.message}`);
+      reject(err);
+    });
   });
 }
 
-(async () => {
-    try {
-        await startServer();
-    } catch (error) {
-        logger.error(`Server startup failed outside of promise: ${error}`);
-        process.exit(1);
-    }
-})();
+export async function startMonitoring(chain: ChainConfig) {
+  const chainKey = chain.name;
+  if (monitoringStarted.has(chainKey)) {
+    logger.info(`Monitoring already active for ${chainKey}`);
+    return;
+  }
+  monitoringStarted.add(chainKey);
 
-async function startMonitoring(chain: ChainConfig) {
-  if (isMonitoring) return;
-  isMonitoring = true;
-
+  logger.event(`Starting monitoring: ${chain.name} (${chain.tokenSymbol})`);
   startReferendumCacheCleanup();
   startValidatorCacheCleanup();
 
   try {
-    logger.event(`Worker ${process.pid} monitoring ${chain.name} (${chain.tokenSymbol})`);
-
     const api = await getApi(chain.name, chain.rpcUrls);
-    if (!api) throw new Error('API connection failed');
+    if (!api) throw new Error('Failed to connect to RPC');
+
+    logger.event(`Connected to ${chain.name} → subscribing to events`);
 
     await api.query.system.events(async (events: any[]) => {
       if (events.length === 0) return;
+      logger.event(`${chain.name}: ${events.length} new event(s)`);
 
-      logger.event(`Worker ${process.pid} → ${chain.name}: ${events.length} events`);
-
-      // ──────────────────────────────────────────────────────────────────
-      // 1. Get all tenants
-      // ──────────────────────────────────────────────────────────────────
       const tenantIds = await storage.getAllTenants();
+      if (tenantIds.length === 0) return;
 
-      // ──────────────────────────────────────────────────────────────────
-      // 2. Load per-chain config for each tenant
-      // ──────────────────────────────────────────────────────────────────
       const tenantConfigs = await Promise.all(
         tenantIds.map(async (tenantId) => {
           const cfg = await storage.loadChainConfig(tenantId, chain.name);
@@ -145,37 +99,113 @@ async function startMonitoring(chain: ChainConfig) {
       }>;
 
       if (validTenants.length === 0) {
-        logger.info(`No tenants configured for chain ${chain.name}`);
+        logger.info(`No tenants configured for ${chain.name}`);
         return;
       }
 
-      logger.event(`Processing ${validTenants.length} tenant(s) on ${chain.name}`);
+      logger.event(`Processing events for ${validTenants.length} tenant(s) on ${chain.name}`);
 
-      // ──────────────────────────────────────────────────────────────────
-      // 3. Dispatch plugin tasks
-      // ──────────────────────────────────────────────────────────────────
       const tasks: Promise<any>[] = [];
-
       for (const record of events) {
-        for (const tenant of validTenants) {
+        for (const { tenantId, config } of validTenants) {
           tasks.push(
             pool.exec('processPluginTask', [
-              {
-                record,
-                tenantId: tenant.tenantId,
-                config: tenant.config,
-                chainId: chain.name,
-                tokenSymbol: chain.tokenSymbol,
-              },
+              { record, tenantId, config, chainId: chain.name, tokenSymbol: chain.tokenSymbol },
             ])
           );
         }
       }
-
       await Promise.allSettled(tasks);
     });
   } catch (err: any) {
-    logger.error(`Monitoring failed on ${chain.name}: ${err.message}`);
-    isMonitoring = false;
+    logger.error(`Monitoring crashed on ${chain.name}: ${err.message}`);
+    monitoringStarted.delete(chainKey);
   }
 }
+
+// ————————————————————————————————
+// GRACEFUL SHUTDOWN — FIXED
+// ————————————————————————————————
+const shutdown = async (signal: string) => {
+  logger.info(`Received ${signal} — Starting graceful shutdown (PID: ${process.pid})`);
+
+  // 1. Stop accepting new connections
+  if (serverInstance) {
+    logger.info('Closing HTTP server...');
+    await new Promise<void>((resolve) => {
+      serverInstance.close((err?: Error) => {
+        if (err) logger.warn(`HTTP server close error: ${err.message}`);
+        else logger.info('HTTP server closed');
+        resolve();
+      });
+    });
+  }
+
+  // 2. Terminate worker pool
+  logger.info('Terminating worker pool...');
+  try {
+    await pool.terminate(); // This waits for all tasks
+    logger.info('Worker pool terminated');
+  } catch (err) {
+    logger.warn(`Worker pool terminate error: ${(err as Error).message}`);
+  }
+
+  // 3. Exit cleanly
+  logger.info(`Worker ${process.pid} shutdown complete`);
+  process.exit(0);
+};
+
+// ————————————————————————————————
+// MAIN
+// ————————————————————————————————
+(async () => {
+  try {
+    ensurePluginsLoaded();
+    await startHttpServer();
+
+    if (!cluster.isWorker && !cluster.isPrimary) {
+      logger.info('SINGLE-PROCESS MODE → Starting monitoring for ALL chains');
+      for (const chain of CHAINS) {
+        startMonitoring(chain);
+      }
+    } else if (cluster.isWorker) {
+      logger.info(`CLUSTER WORKER ${process.pid} ready → waiting for chain assignment`);
+    } else {
+      logger.info(`CLUSTER PRIMARY ${process.pid} managing workers`);
+    }
+
+    // Only workers receive messages — primary doesn't
+    if (cluster.isWorker) {
+      process.on('message', async (msg: any) => {
+        if (msg?.type === 'start-monitoring' && msg?.payload) {
+          try {
+            const chain: ChainConfig = JSON.parse(msg.payload);
+            logger.event(`Worker ${process.pid} ASSIGNED → ${chain.name}`);
+            await startMonitoring(chain);
+          } catch (err: any) {
+            logger.error(`Failed to parse chain assignment: ${err.message}`);
+          }
+        }
+      });
+    }
+
+    // ——————— Graceful shutdown ———————
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT')); // Ctrl+C
+    process.on('SIGHUP', () => shutdown('SIGHUP'));
+
+    // ——————— Handle worker death in primary ———————
+    if (cluster.isPrimary) {
+      cluster.on('exit', (worker, code, signal) => {
+        if (!worker.exitedAfterDisconnect) {
+          logger.warn(`Worker ${worker.process.pid} died (${signal || code}) — Restarting...`);
+          cluster.fork();
+        }
+      });
+    }
+
+  } catch (err: any) {
+    logger.error(`FATAL: Worker failed to start: ${err.message}`);
+    process.exit(1);
+  }
+})();

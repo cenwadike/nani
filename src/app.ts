@@ -14,9 +14,8 @@ import exportRouter from './routes/export';
 import healthRouter from './routes/health';
 import logger from './utils/logger';
 import swaggerUi from 'swagger-ui-express';
-import YAML from 'yamljs';
+import { loadSwaggerDocument } from './utils/swagger';
 import path from 'path';
-import fs from 'fs';
 
 const app: Application = express();
 
@@ -217,7 +216,6 @@ const swaggerOptions = {
       border: 2px solid #E6007A;
       color: #E6007A;
       font-weight: 600;
-      text-color: #fff;
     }
 
     /* Authorization button */
@@ -275,12 +273,6 @@ const swaggerOptions = {
       font-weight: 700;
     }
 
-    /* Highlight successful responses */
-    .swagger-ui .response-col_status .response-col_links {
-      color: #E6007A;
-      font-weight: 700;
-    }
-
     /* Code snippets */
     .swagger-ui .highlight-code {
       background: #1a1a2e !important;
@@ -320,30 +312,6 @@ const swaggerOptions = {
       box-shadow: 0 0 0 3px rgba(230, 0, 122, 0.1);
     }
 
-    /* Response status badges */
-    .swagger-ui .response-col_status {
-      font-weight: 700;
-    }
-
-    /* Success status (2xx) */
-    .swagger-ui .response .response-col_status:contains("200"),
-    .swagger-ui .response .response-col_status:contains("201") {
-      color: #22c55e;
-    }
-
-    /* Error status (4xx, 5xx) */
-    .swagger-ui .response .response-col_status:contains("400"),
-    .swagger-ui .response .response-col_status:contains("401"),
-    .swagger-ui .response .response-col_status:contains("404"),
-    .swagger-ui .response .response-col_status:contains("500") {
-      color: #ef4444;
-    }
-
-    /* Loading animation */
-    .swagger-ui .loading-container {
-      border-color: #E6007A;
-    }
-
     /* Scrollbar styling */
     .swagger-ui ::-webkit-scrollbar {
       width: 10px;
@@ -364,7 +332,7 @@ const swaggerOptions = {
       background: #552BBF;
     }
 
-    /* Add Polkadot logo watermark */
+    /* Polkadot watermark + badge */
     .swagger-ui .information-container::before {
       content: "⚡";
       font-size: 120px;
@@ -375,9 +343,8 @@ const swaggerOptions = {
       z-index: 0;
     }
 
-    /* Custom badge for hackathon */
     .swagger-ui .info .title::after {
-      content: "🏆 Polkadot Cloud Hackathon 2025";
+      content: "Polkadot Cloud Hackathon 2025";
       display: block;
       font-size: 0.3em;
       margin-top: 15px;
@@ -389,11 +356,10 @@ const swaggerOptions = {
       width: fit-content;
     }
 
-    /* Link styling */
+    /* Links & tables */
     .swagger-ui a {
       color: #E6007A;
       font-weight: 600;
-      transition: all 0.2s ease;
     }
 
     .swagger-ui a:hover {
@@ -401,77 +367,38 @@ const swaggerOptions = {
       text-decoration: underline;
     }
 
-    /* Table styling */
-    .swagger-ui table {
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
     .swagger-ui table thead tr {
       background: rgba(230, 0, 122, 0.1);
       border-bottom: 2px solid #E6007A;
     }
 
-    .swagger-ui table thead tr th {
+    .swagger-ui table thead th {
       color: #E6007A;
       font-weight: 700;
     }
 
-    /* Download button (for specs) */
-    .swagger-ui .download-contents {
+    /* Buttons */
+    .swagger-ui .download-contents,
+    .swagger-ui .copy-to-clipboard:hover {
       background: #E6007A;
       color: white;
-      font-weight: 700;
-      border-radius: 6px;
-      padding: 8px 20px;
     }
 
     .swagger-ui .download-contents:hover {
       background: #552BBF;
     }
 
-    /* Example values highlighting */
-    .swagger-ui .examples-select {
-      border: 2px solid #E6007A;
-      border-radius: 6px;
-      font-weight: 600;
-    }
-
-    /* Clipboard button (copy curl) */
-    .swagger-ui .copy-to-clipboard {
-      background: transparent;
-      border: 2px solid #E6007A;
-      color: #E6007A;
-      font-weight: 600;
-      border-radius: 6px;
-      transition: all 0.2s ease;
-    }
-
-    .swagger-ui .copy-to-clipboard:hover {
-      background: #E6007A;
-      color: white;
-    }
-
-    /* Request duration badge */
-    .swagger-ui .response-control-media-type__title {
-      color: #E6007A;
-      font-weight: 700;
-    }
-
-    /* Responsive adjustments */
+    /* Responsive */
     @media (max-width: 768px) {
       .swagger-ui .info .title {
         font-size: 2em;
       }
-
       .swagger-ui .opblock-tag-section h3 {
         font-size: 1.4em;
       }
     }
   `,
-  
   customSiteTitle: "Nani API Docs - Real-Time Polkadot Event Notifications",
-  
   swaggerOptions: {
     persistAuthorization: true,
     displayRequestDuration: true,
@@ -484,101 +411,51 @@ const swaggerOptions = {
     deepLinking: true,
     showExtensions: true,
     showCommonExtensions: true,
-    syntaxHighlight: {
-      activate: true,
-      theme: 'monokai',
-    },
+    syntaxHighlight: { activate: true, theme: 'monokai' },
     requestSnippetsEnabled: true,
     requestSnippets: {
       generators: {
-        curl_bash: {
-          title: "cURL (bash)",
-          syntax: "bash"
-        },
-        curl_powershell: {
-          title: "cURL (PowerShell)",
-          syntax: "powershell"
-        },
-        curl_cmd: {
-          title: "cURL (CMD)",
-          syntax: "bash"
-        }
+        curl_bash: { title: "cURL (bash)", syntax: "bash" },
+        curl_powershell: { title: "cURL (PowerShell)", syntax: "powershell" },
+        curl_cmd: { title: "cURL (CMD)", syntax: "bash" }
       },
-      defaultExpanded: true,
-      languages: null
+      defaultExpanded: true
     },
     validatorUrl: null,
   }
 };
 
-// CRITICAL FIX: Load swagger.yaml with proper error handling
-let swaggerDocument: any = null;
-const swaggerPath = path.join(__dirname, '../swagger.yaml');
-
-const MAX_RETRIES = 10;
-const BACKOFF_FACTOR = 1.5;
-let delay = 1000;
-let lastError: any = null;
-
+// ——————————————————————————————————————
+// Swagger UI — Robust async loading
+// ——————————————————————————————————————
 (async () => {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      if (!fs.existsSync(swaggerPath)) {
-        throw new Error(`swagger.yaml not found at ${swaggerPath}`);
-      }
+  const swaggerDoc = await loadSwaggerDocument();
 
-      logger.info(`Attempt ${attempt}: Loading swagger.yaml from ${swaggerPath}`);
-      const document = YAML.load(swaggerPath);
-
-      if (!document || typeof document !== 'object') {
-        throw new Error('Loaded swagger.yaml is empty or invalid');
-      }
-
-      logger.info(`swagger.yaml loaded successfully on attempt ${attempt}`);
-      swaggerDocument = document;
-      break;
-    } catch (error: any) {
-      lastError = error;
-      logger.warn(`Attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`);
-
-      if (attempt < MAX_RETRIES) {
-        logger.info(`Retrying in ${delay / 1000}s...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay = Math.min(delay * BACKOFF_FACTOR, 10000); // Cap at 10s
-      }
-    }
-  }
-
-  if (!swaggerDocument) {
-    logger.error(`Failed to load swagger.yaml after ${MAX_RETRIES} attempts: ${(lastError as Error).message}`);
+  if (swaggerDoc) {
+    app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc, swaggerOptions));
+    app.get('/openapi.json', (_, res) => res.json(swaggerDoc));
+    app.get('/openapi.yaml', (_, res) => res.sendFile(path.join(process.cwd(), 'swagger.yaml')));
+    logger.info('Swagger UI mounted at /docs');
+    logger.info('OpenAPI JSON: /openapi.json');
+  } else {
+    app.get('/docs', (_, res) => res.status(500).json({ error: 'API documentation unavailable' }));
+    app.get('/openapi.json', (_, res) => res.status(500).json({ error: 'OpenAPI spec failed to load' }));
+    logger.error('Swagger UI disabled — swagger.yaml not found or invalid');
   }
 })();
 
-// Only mount docs if swagger loaded successfully
-if (swaggerDocument) {
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerOptions));
-  logger.info('Swagger UI mounted at /docs');
-} else {
-  app.get('/docs', (req, res) => {
-    res.status(500).json({ error: 'API documentation unavailable' });
-  });
-  logger.warn('Swagger UI not available - swagger.yaml failed to load');
-}
-
+// ——————————————————————————————————————
+// Static files + fallback
+// ——————————————————————————————————————
 app.use(express.static('public'));
 
-app.get('/openapi.json', (req, res) => {
-  const yamlPath = path.join(__dirname, '../swagger.yaml');
-  if (fs.existsSync(yamlPath)) {
-    res.sendFile(yamlPath);
-  } else {
-    res.status(404).json({ error: 'OpenAPI spec not found' });
-  }
+app.get('/openapi.json', (_, res) => {
+  res.sendFile(path.join(process.cwd(), 'swagger.yaml'));
 });
 
-app.get('/', (req, res) => {
-  const indexPath = path.join(__dirname, '../public/index.html');
-  if (fs.existsSync(indexPath)) {
+app.get('/', (_, res) => {
+  const indexPath = path.join(process.cwd(), 'public', 'index.html');
+  if (require('fs').existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
     res.status(404).send('Index page not found');

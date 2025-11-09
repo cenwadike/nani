@@ -4,11 +4,13 @@
   "author": "Kombi",
   "license": "MIT",
   "description": "nani - A high-performance event notification backend for Polkadot.",
-  "main": "dist/cluster.js",
+  "main": "dist/src/entrypoint.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/src/cluster.js",
-    "dev": "ts-node-dev src/cluster.ts",
+    "build": "tsc && cp swagger.yaml dist/swagger.yaml",
+    "start": "node dist/src/entrypoint.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/entrypoint.ts",
+    "dev:cluster": "FORCE_CLUSTER=true ts-node-dev src/entrypoint.ts",
+    "dev:single": "FORCE_SINGLE=true ts-node-dev --respawn --transpile-only src/entrypoint.ts",
     "test": "jest"
   },
   "dependencies": {
