@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <title>Nani - The Future of Web3 Notifications</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-snap-type: y mandatory;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      overflow-x: hidden;
+      height: 100vh;
+      overflow-y: scroll;
+      /* Hide scrollbars while maintaining scroll functionality */
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    /* Hide webkit scrollbar */
+    body::-webkit-scrollbar {
+      display: none;
+    }
+
+    .slide {
+      min-height: 100vh;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      position: relative;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      overflow-y: auto;
+    }
+
+    .slide-content {
+      max-width: 1200px;
+      width: 100%;
+      z-index: 1;
+      position: relative;
+      max-height: 90vh;
+      overflow-y: auto;
+      /* Hide internal scrollbars */
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    /* Remove custom scrollbar styling completely */
+    .slide-content::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Slide 1: Hook */
+    .slide-1 {
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      text-align: center;
+    }
+
+    .slide-1 h1 {
+      font-size: 5em;
+      margin-bottom: 30px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .slide-1 .tagline {
+      font-size: 2.5em;
+      margin-bottom: 40px;
+      line-height: 1.4;
+    }
+
+    .slide-1 .cta {
+      font-size: 1.5em;
+      background: white;
+      color: #E6007A;
+      padding: 20px 50px;
+      border-radius: 50px;
+      display: inline-block;
+      margin-top: 30px;
+      font-weight: 700;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    /* Slide 2: Problem */
+    .slide-2 {
+      background: linear-gradient(to bottom, #1a1a2e 0%, #0a0a0a 100%);
+    }
+
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 40px;
+      margin-top: 50px;
+    }
+
+    .problem-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 40px;
+      border-radius: 20px;
+      border: 2px solid #E6007A;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .problem-card::before {
+      content: '❌';
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 3em;
+      opacity: 0.3;
+    }
+
+    .problem-card h3 {
+      font-size: 2em;
+      margin-bottom: 20px;
+      color: #E6007A;
+    }
+
+    .problem-card ul {
+      list-style: none;
+      font-size: 1.3em;
+      line-height: 2;
+    }
+
+    .problem-card ul li::before {
+      content: '• ';
+      color: #E6007A;
+    }
+
+    .title {
+      font-size: 3.5em;
+      margin-bottom: 20px;
+      text-align: center;
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Slide 3: Solution Demo */
+    .slide-3 {
+      background: #0a0a0a;
+    }
+
+    .demo-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      margin-top: 50px;
+      align-items: center;
+    }
+
+    .terminal {
+      background: #1a1a2e;
+      border-radius: 15px;
+      padding: 30px;
+      font-family: 'Courier New', monospace;
+      font-size: 1.2em;
+      box-shadow: 0 20px 60px rgba(230, 0, 122, 0.3);
+    }
+
+    .terminal-line {
+      margin: 15px 0;
+      opacity: 0;
+      animation: typewriter 0.5s ease forwards;
+    }
+
+    .terminal-line:nth-child(1) { animation-delay: 0.5s; }
+    .terminal-line:nth-child(2) { animation-delay: 1s; }
+    .terminal-line:nth-child(3) { animation-delay: 1.5s; }
+    .terminal-line:nth-child(4) { animation-delay: 2s; }
+
+    @keyframes typewriter {
+      to { opacity: 1; }
+    }
+
+    .prompt {
+      color: #00ff00;
+    }
+
+    .output {
+      color: #00bfff;
+      margin-left: 20px;
+    }
+
+    .notification-demo {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .notification {
+      background: linear-gradient(135deg, rgba(230, 0, 122, 0.2) 0%, rgba(85, 43, 191, 0.2) 100%);
+      padding: 25px;
+      border-radius: 15px;
+      border-left: 5px solid #E6007A;
+      transform: translateX(100%);
+      animation: slideIn 0.5s ease forwards;
+    }
+
+    .notification:nth-child(1) { animation-delay: 2.5s; }
+    .notification:nth-child(2) { animation-delay: 3s; }
+    .notification:nth-child(3) { animation-delay: 3.5s; }
+
+    @keyframes slideIn {
+      to { transform: translateX(0); }
+    }
+
+    .notification-icon {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+
+    .notification-title {
+      font-size: 1.5em;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .notification-text {
+      font-size: 1.2em;
+      opacity: 0.9;
+    }
+
+    /* Slide 4: Unfair Advantages */
+    .slide-4 {
+      background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0a 100%);
+    }
+
+    .advantages {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+      margin-top: 50px;
+    }
+
+    .advantage-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      border: 2px solid transparent;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+    }
+
+    .advantage-card:hover {
+      border-color: #E6007A;
+      transform: translateY(-10px);
+      box-shadow: 0 20px 40px rgba(230, 0, 122, 0.3);
+    }
+
+    .advantage-icon {
+      font-size: 4em;
+      margin-bottom: 20px;
+    }
+
+    .advantage-card h3 {
+      font-size: 2em;
+      margin-bottom: 15px;
+      color: #E6007A;
+    }
+
+    .advantage-card p {
+      font-size: 1.2em;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    /* Slide 5: Market */
+    .slide-5 {
+      background: #0a0a0a;
+    }
+
+    .market-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 40px;
+      margin-top: 50px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(230, 0, 122, 0.1) 0%, rgba(85, 43, 191, 0.1) 100%);
+      padding: 50px;
+      border-radius: 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(230, 0, 122, 0.1) 0%, transparent 70%);
+      animation: rotate 10s linear infinite;
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .stat-number {
+      font-size: 5em;
+      font-weight: 900;
+      color: #E6007A;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stat-label {
+      font-size: 1.8em;
+      margin-top: 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Slide 6: Business Model */
+    .slide-6 {
+      background: linear-gradient(to bottom, #1a1a2e 0%, #0a0a0a 100%);
+    }
+
+    .revenue-streams {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+      margin-top: 50px;
+    }
+
+    .stream-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 35px;
+      border-radius: 15px;
+      border-left: 5px solid #E6007A;
+    }
+
+    .phase-badge {
+      display: inline-block;
+      background: #E6007A;
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+    }
+
+    .stream-card h3 {
+      font-size: 1.8em;
+      margin-bottom: 15px;
+      color: #fff;
+    }
+
+    .stream-card ul {
+      list-style: none;
+      font-size: 1.2em;
+      line-height: 1.8;
+    }
+
+    .stream-card ul li::before {
+      content: '→ ';
+      color: #E6007A;
+      font-weight: 700;
+    }
+
+    /* Slide 7: GTM Strategy */
+    .slide-7 {
+      background: #0a0a0a;
+    }
+
+    .gtm-phases {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      margin-top: 50px;
+    }
+
+    .phase {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 40px;
+      border-radius: 20px;
+      border-left: 5px solid #E6007A;
+      position: relative;
+    }
+
+    .phase-number {
+      position: absolute;
+      top: -20px;
+      left: 40px;
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2em;
+      font-weight: 900;
+    }
+
+    .phase h3 {
+      font-size: 2em;
+      margin-bottom: 20px;
+      margin-left: 80px;
+      color: #E6007A;
+    }
+
+    .phase-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 20px;
+    }
+
+    .phase-col h4 {
+      font-size: 1.5em;
+      margin-bottom: 15px;
+      color: #fff;
+    }
+
+    .phase-col p {
+      font-size: 1.2em;
+      line-height: 1.8;
+      opacity: 0.9;
+    }
+
+    /* Slide 8: Traction */
+    .slide-8 {
+      background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0a 100%);
+    }
+
+    .traction-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+      margin-top: 50px;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 40px;
+      border-radius: 20px;
+      text-align: center;
+      border: 2px solid transparent;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .metric-card:hover {
+      border-color: #E6007A;
+      transform: scale(1.05);
+    }
+
+    .metric-icon {
+      font-size: 3em;
+      margin-bottom: 20px;
+    }
+
+    .metric-value {
+      font-size: 3em;
+      font-weight: 900;
+      color: #E6007A;
+      margin-bottom: 10px;
+    }
+
+    .metric-label {
+      font-size: 1.3em;
+      opacity: 0.9;
+    }
+
+    .testimonials {
+      margin-top: 60px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+    }
+
+    .testimonial {
+      background: rgba(230, 0, 122, 0.1);
+      padding: 30px;
+      border-radius: 15px;
+      border-left: 5px solid #E6007A;
+    }
+
+    .testimonial-text {
+      font-size: 1.3em;
+      font-style: italic;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .testimonial-author {
+      font-size: 1.1em;
+      color: #E6007A;
+      font-weight: 700;
+    }
+
+    /* Slide 9: Team */
+    .slide-9 {
+      background: #0a0a0a;
+    }
+
+    .team-content {
+      display: flex;
+      gap: 60px;
+      margin-top: 50px;
+      align-items: center;
+    }
+
+    .founder-profile {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 50px;
+      border-radius: 20px;
+      border: 2px solid #E6007A;
+    }
+
+    .founder-avatar {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4em;
+      margin: 0 auto 30px;
+    }
+
+    .founder-name {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-align: center;
+      color: #E6007A;
+    }
+
+    .founder-title {
+      font-size: 1.5em;
+      text-align: center;
+      opacity: 0.9;
+      margin-bottom: 30px;
+    }
+
+    .founder-bio {
+      font-size: 1.3em;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    .founder-quote {
+      background: rgba(230, 0, 122, 0.1);
+      padding: 25px;
+      border-radius: 10px;
+      border-left: 5px solid #E6007A;
+      font-size: 1.4em;
+      font-style: italic;
+      margin-top: 30px;
+    }
+
+    /* Slide 10: The Ask */
+    .slide-10 {
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      text-align: center;
+    }
+
+    .ask-content {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .goals {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+      margin: 50px 0;
+    }
+
+    .goal-card {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 20px;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .goal-card:hover {
+      transform: translateY(-10px);
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .goal-icon {
+      font-size: 3em;
+      margin-bottom: 20px;
+    }
+
+    .goal-title {
+      font-size: 1.8em;
+      margin-bottom: 15px;
+      font-weight: 700;
+    }
+
+    .goal-desc {
+      font-size: 1.2em;
+      opacity: 0.95;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 30px;
+      justify-content: center;
+      margin-top: 50px;
+      flex-wrap: wrap;
+    }
+
+    .cta-btn {
+      background: white;
+      color: #E6007A;
+      padding: 20px 50px;
+      border-radius: 50px;
+      font-size: 1.5em;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: inline-block;
+    }
+
+    .cta-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .cta-btn.secondary {
+      background: transparent;
+      color: white;
+      border: 3px solid white;
+    }
+
+    /* Slide 11: Closing */
+    .slide-11 {
+      background: #0a0a0a;
+      text-align: center;
+    }
+
+    .closing-logo {
+      font-size: 8em;
+      margin-bottom: 30px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .closing-title {
+      font-size: 4em;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .closing-tagline {
+      font-size: 2em;
+      margin-bottom: 50px;
+      opacity: 0.9;
+    }
+
+    .closing-cta {
+      font-size: 2.5em;
+      font-weight: 700;
+      margin-bottom: 30px;
+      color: #E6007A;
+    }
+
+    .social-links {
+      display: flex;
+      gap: 30px;
+      justify-content: center;
+      margin-top: 50px;
+    }
+
+    .social-link {
+      color: white;
+      font-size: 1.5em;
+      text-decoration: none;
+      padding: 15px 30px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 30px;
+      transition: all 0.3s ease;
+    }
+
+    .social-link:hover {
+      background: #E6007A;
+      transform: scale(1.1);
+    }
+
+    /* Navigation */
+    .nav-dots {
+      position: fixed;
+      right: 30px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      pointer-events: auto;
+    }
+
+    .nav-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .nav-dot.active {
+      background: #E6007A;
+      transform: scale(1.5);
+    }
+
+    .nav-dot:hover {
+      background: #E6007A;
+    }
+
+    /* Scroll indicator */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: bounce 2s ease-in-out infinite;
+      font-size: 2em;
+      opacity: 0.7;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .slide-content {
+        padding: 20px;
+      }
+
+      .title {
+        font-size: 2.5em;
+      }
+
+      .problem-grid,
+      .advantages,
+      .market-stats,
+      .revenue-streams,
+      .traction-grid,
+      .goals {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-container,
+      .phase-content,
+      .testimonials {
+        grid-template-columns: 1fr;
+      }
+
+      .slide-1 h1 {
+        font-size: 3em;
+      }
+
+      .slide-1 .tagline {
+        font-size: 1.5em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- ... existing slides ... -->
+
+  <!-- Slide 1: Hook -->
+  <div class="slide slide-1">
+    <div class="slide-content">
+      <h1>⚡ NANI</h1>
+      <p class="tagline">
+        What if you could add<br>
+        <strong>enterprise-grade blockchain notifications</strong><br>
+        to your app in <strong>50 seconds</strong>... for <strong>FREE</strong>?
+      </p>
+      <div class="cta">Built for Polkadot Cloud</div>
+      <div class="scroll-indicator">↓</div>
+    </div>
+  </div>
+
+  <!-- Slide 2: The Problem -->
+  <div class="slide slide-2">
+    <div class="slide-content">
+      <h2 class="title">The Broken Ecosystem</h2>
+      <p style="text-align: center; font-size: 1.5em; margin-bottom: 30px; opacity: 0.9;">
+        Web3 developers face a false choice...
+      </p>
+      <div class="problem-grid">
+        <div class="problem-card">
+          <h3>Enterprise SaaS</h3>
+          <p style="font-size: 1.5em; color: #E6007A; margin-bottom: 20px;">Notifi: $12.5M raised</p>
+          <ul>
+            <li>$10,000+ contracts</li>
+            <li>Vendor lock-in</li>
+            <li>Closed source</li>
+            <li>Black box architecture</li>
+          </ul>
+        </div>
+        <div class="problem-card">
+          <h3>Free Tools</h3>
+          <p style="font-size: 1.5em; color: #E6007A; margin-bottom: 20px;">Web3Alert, Hal Notify</p>
+          <ul>
+            <li>No API access</li>
+            <li>Limited features</li>
+            <li>Can't customize</li>
+            <li>SaaS-only</li>
+          </ul>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 2em; margin-top: 50px; color: #E6007A;">
+        <strong>You cannot have enterprise features + free access + full ownership...</strong>
+      </p>
+      <p style="text-align: center; font-size: 2.5em; margin-top: 20px; font-weight: 700;">
+        UNTIL NOW.
+      </p>
+    </div>
+  </div>
+
+  <!-- Slide 3: Solution Demo -->
+  <div class="slide slide-3">
+    <div class="slide-content">
+      <h2 class="title">The Solution</h2>
+      <p style="text-align: center; font-size: 1.8em; margin-bottom: 30px;">
+        Watch Nani in action - <strong>47 seconds from setup to notifications</strong>
+      </p>
+      <div class="demo-container">
+        <div class="terminal">
+          <div class="terminal-line">
+            <span class="prompt">$</span> curl -X POST /auth -d '{"email":"alice@ex.com"}'
+          </div>
+          <div class="terminal-line output">
+            → JWT token in 50ms ✓
+          </div>
+          <div class="terminal-line">
+            <span class="prompt">$</span> curl -X POST /setup -d '{ chains: 2, notifications: 3 }'
+          </div>
+          <div class="terminal-line output">
+            → Configuration saved ✓
+          </div>
+          <div class="terminal-line" style="margin-top: 30px; color: #00ff00;">
+            [Transfer detected on Westend]
+          </div>
+        </div>
+        <div class="notification-demo">
+          <div class="notification">
+            <div class="notification-icon">💬</div>
+            <div class="notification-title">Discord</div>
+            <div class="notification-text">💰 You received 10 WND from Alice</div>
+          </div>
+          <div class="notification">
+            <div class="notification-icon">📱</div>
+            <div class="notification-title">SMS</div>
+            <div class="notification-text">💰 You received 10 WND from Alice</div>
+          </div>
+          <div class="notification">
+            <div class="notification-icon">📧</div>
+            <div class="notification-title">Email</div>
+            <div class="notification-text">💰 You received 10 WND from Alice</div>
+          </div>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 2em; margin-top: 50px; color: #E6007A; font-weight: 700;">
+        Total Time: 47 seconds | Latency: &lt;100ms | Status: Production Ready
+      </p>
+    </div>
+  </div>
+
+  <!-- Slide 4: Unfair Advantages -->
+  <div class="slide slide-4">
+    <div class="slide-content">
+      <h2 class="title">3 Unfair Advantages</h2>
+      <p style="text-align: center; font-size: 1.8em; margin-bottom: 30px;">
+        Competitors can't copy this...
+      </p>
+      <div class="advantages">
+        <div class="advantage-card">
+          <div class="advantage-icon">🔌</div>
+          <h3>Plugin Architecture</h3>
+          <p>
+            Drop a 20-line TypeScript file → instant new feature.
+            No restart needed. Industry first.
+          </p>
+        </div>
+        <div class="advantage-card">
+          <div class="advantage-icon">⚡</div>
+          <h3>PAPI-Powered</h3>
+          <p>
+            Built on Polkadot Cloud with automatic RPC failover.
+            99.9% uptime guaranteed.
+          </p>
+        </div>
+        <div class="advantage-card">
+          <div class="advantage-icon">🏠</div>
+          <h3>Self-Hosted Freedom</h3>
+          <p>
+            Deploy anywhere. Railway, Docker, AWS. Your data, your servers, your rules.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Market Opportunity -->
+  <div class="slide slide-5">
+    <div class="slide-content">
+      <h2 class="title">Massive Market Opportunity</h2>
+      <div class="market-stats">
+        <div class="stat-card">
+          <div class="stat-number">$500M+</div>
+          <div class="stat-label">Total Addressable Market</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">$12.5M</div>
+          <div class="stat-label">Notifi Raised (Closed Source)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">2,000+</div>
+          <div class="stat-label">Polkadot dApps Need This</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">0</div>
+          <div class="stat-label">Open-Source Competitors</div>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 2em; margin-top: 50px;">
+        <strong>Nani disrupts by making premium features FREE and OPEN</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- Slide 6: Business Model -->
+  <div class="slide slide-6">
+    <div class="slide-content">
+      <h2 class="title">Multiple Revenue Streams</h2>
+      <div class="revenue-streams">
+        <div class="stream-card">
+          <span class="phase-badge">Stream 1: Months 1-6</span>
+          <h3>Developer Adoption</h3>
+          <ul>
+            <li>Free self-hosted tier</li>
+            <li>Community support</li>
+            <li>Goal: 10,000+ developers</li>
+            <li>Investment: $0 (organic)</li>
+          </ul>
+        </div>
+        <div class="stream-card">
+          <span class="phase-badge">Stream 2: Months 7-12</span>
+          <h3>Managed Hosting</h3>
+          <ul>
+            <li>Starter: $49/mo (1K tenants)</li>
+            <li>Pro: $199/mo (10K tenants)</li>
+            <li>Enterprise: Custom pricing</li>
+            <li>Target: $50K MRR by Month 12</li>
+          </ul>
+        </div>
+        <div class="stream-card">
+          <span class="phase-badge">Stream 3: Year 2</span>
+          <h3>Premium Features</h3>
+          <ul>
+            <li>Plugin marketplace (20% commission)</li>
+            <li>Advanced analytics (ML models)</li>
+            <li>White-label licensing ($5K-$50K)</li>
+            <li>Target: $200K MRR</li>
+          </ul>
+        </div>
+        <div class="stream-card">
+          <span class="phase-badge">Stream 4: Year 2+</span>
+          <h3>Ecosystem Expansion</h3>
+          <ul>
+            <li>Multi-chain (EVM, Solana, Cosmos)</li>
+            <li>DAO governance</li>
+            <li>Enterprise contracts</li>
+            <li>Target: $1M+ MRR</li>
+          </ul>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 1.8em; margin-top: 40px; color: #E6007A;">
+        <strong>Open source doesn't mean unprofitable. It means unstoppable.</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- Slide 7: Go-to-Market Strategy -->
+  <div class="slide slide-7">
+    <div class="slide-content">
+      <h2 class="title">3-Phase Rocket Launch</h2>
+      <div class="gtm-phases">
+        <div class="phase">
+          <div class="phase-number">1</div>
+          <h3>Developer Adoption (Months 1-6)</h3>
+          <div class="phase-content">
+            <div class="phase-col">
+              <h4>Targets</h4>
+              <p>
+                • Polkadot wallet developers<br>
+                • Portfolio trackers<br>
+                • DeFi protocols<br>
+                • Mobile app teams
+              </p>
+            </div>
+            <div class="phase-col">
+              <h4>Tactics</h4>
+              <p>
+                • Win hackathon → credibility<br>
+                • GitHub + docs site → SEO<br>
+                • YouTube tutorials<br>
+                • Direct outreach to 50 teams<br>
+                <strong>Goal: 1,000 developers</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">2</div>
+          <h3>Managed Platform (Months 6-12)</h3>
+          <div class="phase-content">
+            <div class="phase-col">
+              <h4>Targets</h4>
+              <p>
+                • Teams without DevOps<br>
+                • Mobile-first apps<br>
+                • Non-technical founders<br>
+                • Rapid prototypers
+              </p>
+            </div>
+            <div class="phase-col">
+              <h4>Tactics</h4>
+              <p>
+                • Launch nani.cloud<br>
+                • One-click deploy<br>
+                • Accelerator partnerships<br>
+                • Sponsor events<br>
+                <strong>Goal: $50K MRR</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">3</div>
+          <h3>Ecosystem Expansion (Year 2+)</h3>
+          <div class="phase-content">
+            <div class="phase-col">
+              <h4>Targets</h4>
+              <p>
+                • EVM chains (Ethereum, Polygon)<br>
+                • Non-EVM (Solana, Cosmos)<br>
+                • Web2 enterprises entering Web3<br>
+                • Global markets
+              </p>
+            </div>
+            <div class="phase-col">
+              <h4>Tactics</h4>
+              <p>
+                • Multi-chain adapters<br>
+                • Enterprise sales team<br>
+                • Conference circuit<br>
+                • VC funding ($2M-$5M)<br>
+                <strong>Goal: $1M MRR</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 8: Traction -->
+  <div class="slide slide-8">
+    <div class="slide-content">
+      <h2 class="title">Proven Traction</h2>
+      <p style="text-align: center; font-size: 1.8em; margin-bottom: 30px;">
+        We're not pitching vaporware. Nani is <strong>LIVE</strong> and <strong>WORKING</strong>.
+      </p>
+      <div class="traction-grid">
+        <div class="metric-card">
+          <div class="metric-icon">💻</div>
+          <div class="metric-value">2,800</div>
+          <div class="metric-label">Lines of Production Code</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">🔌</div>
+          <div class="metric-value">12</div>
+          <div class="metric-label">Plugins Ready</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">🌐</div>
+          <div class="metric-value">4</div>
+          <div class="metric-label">Chains Supported</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">⚡</div>
+          <div class="metric-value">&lt;100ms</div>
+          <div class="metric-label">Average Latency</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">🚀</div>
+          <div class="metric-value">99.9%</div>
+          <div class="metric-label">Uptime (Testing)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon">👥</div>
+          <div class="metric-value">3</div>
+          <div class="metric-label">Teams Interested</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 9: The Team -->
+  <div class="slide slide-9">
+    <div class="slide-content">
+      <h2 class="title">Built by Builders</h2>
+      <div class="team-content">
+        <div class="founder-profile">
+          <div class="founder-avatar">👨‍💻</div>
+          <div class="founder-name">Kombi</div>
+          <div class="founder-title">Founder & Developer</div>
+          <div class="founder-bio">
+            <p style="margin-bottom: 20px;">
+              <strong>Background:</strong> Blockchain Engineer with experience building event streaming and notification systems for Web3 applications.
+            </p>
+            <p style="margin-bottom: 20px;">
+              <strong>Location:</strong> Building from Africa for the global Polkadot ecosystem.
+            </p>
+            <p>
+              <strong>Expertise:</strong> TypeScript, Node.js, PAPI, Substrate, Multi-tenant architecture
+            </p>
+          </div>
+          <div class="founder-quote">
+            "I've built event based systems 5 times. Each time took hours. 
+            Nani makes this notification infrastructure FREE and INSTANT for everyone. This is personal."
+          </div>
+        </div>
+        <div style="flex: 1;">
+          <div style="background: rgba(255, 255, 255, 0.05); padding: 40px; border-radius: 20px; margin-bottom: 30px;">
+            <h3 style="font-size: 2em; margin-bottom: 20px; color: #E6007A;">Why This Matters</h3>
+            <p style="font-size: 1.3em; line-height: 1.8;">
+              Built in <strong>2 weeks</strong> during the hackathon.<br><br>
+              Every feature is production-ready.<br><br>
+              Every plugin works in real-time.<br><br>
+              Every line of code is open source.<br><br>
+              This is not a prototype.
+            </p>
+          </div>
+          <div style="background: rgba(230, 0, 122, 0.1); padding: 40px; border-radius: 20px;">
+            <h3 style="font-size: 2em; margin-bottom: 20px; color: #E6007A;">Contact</h3>
+            <p style="font-size: 1.3em; line-height: 2;">
+              📧 cenwadike@gmail.com<br>
+              🐙 github.com/cenwadike/nani<br>
+              🌐 https://nani-production-c105.up.railway.app/
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 10: The Ask -->
+  <div class="slide slide-10">
+    <div class="slide-content">
+      <div class="ask-content">
+        <h2 style="font-size: 4em; margin-bottom: 30px;">What We Need to Win</h2>
+        <p style="font-size: 1.8em; margin-bottom: 50px;">
+          ...and change Web3 infrastructure forever
+        </p>
+        <div class="goals">
+          <div class="goal-card">
+            <div class="goal-icon">🏆</div>
+            <div class="goal-title">Win Hackathon</div>
+            <div class="goal-desc">
+              Tinkerers Category<br>
+              Market validation<br>
+              Prize: $500-$3,000
+            </div>
+          </div>
+          <div class="goal-card">
+            <div class="goal-icon">👥</div>
+            <div class="goal-title">10 Beta Teams</div>
+            <div class="goal-desc">
+              Production usage<br>
+              Feedback loop<br>
+              Case studies
+            </div>
+          </div>
+          <div class="goal-card">
+            <div class="goal-icon">⭐</div>
+            <div class="goal-title">100 GitHub Stars</div>
+            <div class="goal-desc">
+              Community validation<br>
+              Developer interest<br>
+              Momentum
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 60px;">
+          <p style="font-size: 2.5em; font-weight: 700; margin-bottom: 30px;">
+            Long-Term Vision (12 Months)
+          </p>
+          <p style="font-size: 1.8em; line-height: 2; opacity: 0.95;">
+            → Become the STANDARD for Web3 notifications<br>
+            → 10,000+ developers using Nani<br>
+            → $50K MRR from managed platform<br>
+            → Expand beyond Polkadot to all chains<br>
+            → Series A ready ($1M ARR potential)
+          </p>
+        </div>
+        <div class="cta-buttons">
+          <a href="/docs" class="cta-btn">Try Live Demo</a>
+          <a href="https://github.com/cenwadike/nani" class="cta-btn secondary" target="_blank">View on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 11: Closing -->
+  <div class="slide slide-11">
+    <div class="slide-content">
+      <div class="closing-logo">⚡</div>
+      <h1 class="closing-title">NANI</h1>
+      <p class="closing-tagline">
+        Open Source. Self-Hosted. Infinitely Extensible.
+      </p>
+      <p style="font-size: 2em; margin-bottom: 50px; line-height: 1.6;">
+        Web3 promised decentralization.<br>
+        But infrastructure is still centralized, expensive, and closed.
+      </p>
+      <p class="closing-cta">
+        Nani changes that.<br>
+        One plugin at a time.
+      </p>
+      <p style="font-size: 1.8em; margin-top: 50px; opacity: 0.9;">
+        The Future of Web3 Infrastructure Starts Here.
+      </p>
+      <div class="social-links">
+        <a href="/docs" class="social-link">📚 Documentation</a>
+        <a href="https://github.com/cenwadike/nani" class="social-link" target="_blank">🐙 GitHub</a>
+        <a href="mailto:cenwadike@gmail.com" class="social-link">📧 Contact</a>
+      </div>
+      <p style="font-size: 1.3em; margin-top: 60px; opacity: 0.7;">
+        Built with ❤️ in Africa for the Polkadot ecosystem<br>
+        #PolkadotCloudHackathon2025 #OpenSource #Web3Infrastructure
+      </p>
+    </div>
+  </div>
+
+  <!-- Navigation Dots -->
+  <div class="nav-dots">
+    <div class="nav-dot active" data-slide="0"></div>
+    <div class="nav-dot" data-slide="1"></div>
+    <div class="nav-dot" data-slide="2"></div>
+    <div class="nav-dot" data-slide="3"></div>
+    <div class="nav-dot" data-slide="4"></div>
+    <div class="nav-dot" data-slide="5"></div>
+    <div class="nav-dot" data-slide="6"></div>
+    <div class="nav-dot" data-slide="7"></div>
+    <div class="nav-dot" data-slide="8"></div>
+    <div class="nav-dot" data-slide="9"></div>
+    <div class="nav-dot" data-slide="10"></div>
+  </div>
+
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const navDots = document.querySelectorAll('.nav-dot');
+    let isScrolling = false;
+
+    // Debounce helper for smooth scroll handling
+    let scrollTimeout;
+    const SCROLL_DEBOUNCE = 600; // Reduced from 1000ms for snappier feel
+
+    function debounceScroll(callback, delay) {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(callback, delay);
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === ' ') {
+        e.preventDefault();
+        navigateToSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateToSlide(currentSlide - 1);
+      }
+    });
+
+    // Mouse wheel navigation with professional easing
+    document.addEventListener('wheel', (e) => {
+      if (isScrolling) return;
+      
+      debounceScroll(() => {
+        if (e.deltaY > 0) {
+          navigateToSlide(currentSlide + 1);
+        } else {
+          navigateToSlide(currentSlide - 1);
+        }
+      }, 0);
+    }, { passive: true });
+
+    // Touch navigation for mobile
+    let touchStartY = 0;
+    document.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      if (isScrolling) return;
+      
+      const touchEndY = e.changedTouches[0].clientY;
+      const diff = touchStartY - touchEndY;
+      
+      if (Math.abs(diff) > 50) {
+        debounceScroll(() => {
+          if (diff > 0) {
+            navigateToSlide(currentSlide + 1);
+          } else {
+            navigateToSlide(currentSlide - 1);
+          }
+        }, 0);
+      }
+    }, { passive: true });
+
+    // Nav dot click handlers
+    navDots.forEach((dot, index) => {
+      dot.addEventListener('click', () => {
+        navigateToSlide(index);
+      });
+    });
+
+    function navigateToSlide(index) {
+      if (index < 0 || index >= slides.length || isScrolling) return;
+      
+      isScrolling = true;
+      currentSlide = index;
+      
+      slides[index].scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+      
+      updateNavDots();
+      
+      setTimeout(() => {
+        isScrolling = false;
+      }, SCROLL_DEBOUNCE);
+    }
+
+    function updateNavDots() {
+      navDots.forEach((dot, index) => {
+        if (index === currentSlide) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+    }
+
+    // Track slide views with Intersection Observer for better performance
+    const slideObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const slideIndex = Array.from(slides).indexOf(entry.target);
+          currentSlide = slideIndex;
+          updateNavDots();
+          console.log(`Viewing slide ${slideIndex + 1} of ${slides.length}`);
+        }
+      });
+    }, { threshold: 0.5 });
+
+    slides.forEach(slide => slideObserver.observe(slide));
+
+    // Prevent default scroll behavior on spacebar
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+      }
+    });
+  </script>
+</body>
+</html>

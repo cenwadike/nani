@@ -462,6 +462,15 @@ app.get('/', (_, res) => {
   }
 });
 
+app.get('/pitch', (_, res) => {
+  const indexPath = path.join(process.cwd(), 'public', 'pitch.html');
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Pitch page not found');
+  }
+});
+
 app.use(errorHandler);
 
 export default app;
