@@ -217,6 +217,7 @@ const swaggerOptions = {
       border: 2px solid #E6007A;
       color: #E6007A;
       font-weight: 600;
+      text-color: #fff;
     }
 
     /* Authorization button */
@@ -469,9 +470,7 @@ const swaggerOptions = {
     }
   `,
   
-  customSiteTitle: "Nani API Docs - Real-Time Polkadot Event Streaming",
-  
-  customfavIcon: "https://polkadot.network/favicon.ico",
+  customSiteTitle: "Nani API Docs - Real-Time Polkadot Event Notifications",
   
   swaggerOptions: {
     persistAuthorization: true,

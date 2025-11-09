@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: 'Nani API - Real-Time Polkadot Event Streaming and Notifications'
+  title: 'Nani API - Real-Time Polkadot Event Notifications'
   version: 1.0.0
 
 servers:
@@ -169,7 +169,7 @@ paths:
         1. Validates your Polkadot address (SS58 format)
         2. Configures activity plugins (what events to monitor)
         3. Configures notification channels (where to send alerts)
-        4. Starts streaming events in real-time
+        4. Starts getting event notifications in real-time
         
         ### Activity Plugins
         - `transfers` - Balance transfers (incoming/outgoing)

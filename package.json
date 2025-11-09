@@ -1,7 +1,9 @@
 {
   "name": "nani",
-  "version": "1.0.0",
-  "description": "nani API Server",
+  "version": "0.1.0",
+  "author": "Kombi",
+  "license": "MIT",
+  "description": "nani - A high-performance event notification backend for Polkadot.",
   "main": "dist/cluster.js",
   "scripts": {
     "build": "tsc",
@@ -9,8 +11,6 @@
     "dev": "ts-node-dev src/cluster.ts",
     "test": "jest"
   },
-  "author": "Kombi",
-  "license": "MIT",
   "dependencies": {
     "@polkadot/api": "^10.11.1",
     "@polkadot/keyring": "^12.3.1",
