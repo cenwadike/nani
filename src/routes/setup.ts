@@ -55,7 +55,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { saveChainConfig } from '../utils/storage';
+import { saveChainConfig, TenantConfig } from '../utils/storage';
 import { ensurePluginsLoaded, getPlugin } from '../utils/pluginRegistry';
 import { isValidPolkadotAddress } from '../utils/validateAddress';
 import { NotificationPlugin } from '../types/pluginTypes';
@@ -263,7 +263,7 @@ router.post('/', async (req: Request, res: Response) => {
       }
 
       // ——— SUCCESS: Save encrypted config ———
-      const configData = {
+      const configData: TenantConfig = {
         address: polkadotAddress,
         chainId: chain.name,
         tokenSymbol: chain.tokenSymbol,

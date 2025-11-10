@@ -11,6 +11,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/entrypoint.ts",
     "dev:cluster": "FORCE_CLUSTER=true ts-node-dev src/entrypoint.ts",
     "dev:single": "FORCE_SINGLE=true ts-node-dev --respawn --transpile-only src/entrypoint.ts",
+    "db:admin": "node -e \"import('./dist/utils/storage.js').then(m => m.startAdminGui(3001, {username:'admin', password:'nani2025'}))\"",
+    "db:admin:open": "npm run db:admin -- --open",
+    "db:reset": "rm -rf /tmp/nani-data && echo 'DB wiped – restart app'",
     "test": "jest"
   },
   "dependencies": {
@@ -18,6 +21,8 @@
     "@polkadot/keyring": "^12.3.1",
     "@polkadot/util": "^12.3.1",
     "@types/nodemailer": "^7.0.3",
+    "acebase": "^1.22.2",
+    "acebase-server": "^1.19.0",
     "archiver": "^7.0.1",
     "axios": "^1.6.2",
     "cors": "^2.8.5",

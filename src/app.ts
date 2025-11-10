@@ -62,8 +62,89 @@ import logger from './utils/logger';
 import swaggerUi from 'swagger-ui-express';
 import { loadSwaggerDocument } from './utils/swagger';
 import path from 'path';
+import storage from './utils/storage';
 
 const app: Application = express();
+
+// ————————————————————————————————
+// DATABASE INITIALIZATION
+// ————————————————————————————————
+var dbInitialized = false;
+
+(async () => {
+  try {
+    logger.info('Starting database initialization...');
+    
+    // Ensure database is initialized before starting server
+    await storage.initDb();
+    logger.info('✓ AceBase database initialized successfully');
+
+    // Initialize empty data structure to prevent null reference errors
+    const db = storage.getDb();
+    
+    // Check if configs exist, if not create empty structure
+    try {
+      const configsSnapshot = await db.ref('configs').get();
+      if (!configsSnapshot.exists()) {
+        logger.info('Initializing empty configs structure...');
+        await db.ref('configs').set({});
+      }
+    } catch (err: any) {
+      logger.warn(`Could not check configs: ${err.message}`);
+      // Create empty structure on error
+      await db.ref('configs').set({}).catch(() => {});
+    }
+
+    // Check if logs exist, if not create empty structure
+    try {
+      const logsSnapshot = await db.ref('logs').get();
+      if (!logsSnapshot.exists()) {
+        logger.info('Initializing empty logs structure...');
+        await db.ref('logs').set({});
+      }
+    } catch (err: any) {
+      logger.warn(`Could not check logs: ${err.message}`);
+      // Create empty structure on error
+      await db.ref('logs').set({}).catch(() => {});
+    }
+
+    dbInitialized = true;
+    logger.info('✓ Database structure initialized');
+
+    // Start Admin GUI if enabled (AFTER data structure is ready)
+    const adminGuiEnabled = process.env.ADMIN_GUI_ENABLED === 'true';
+    
+    if (adminGuiEnabled) {
+      const adminPort = parseInt(process.env.ADMIN_GUI_PORT || '3001', 10);
+      const adminCredentials = process.env.ADMIN_GUI_USERNAME && process.env.ADMIN_GUI_PASSWORD
+        ? {
+            username: process.env.ADMIN_GUI_USERNAME,
+            password: process.env.ADMIN_GUI_PASSWORD,
+          }
+        : undefined;
+
+      try {
+        await storage.startAdminGui(adminPort, adminCredentials);
+        
+        if (!adminCredentials) {
+          logger.warn(
+            '⚠️  Admin GUI running without authentication! ' +
+            'Set ADMIN_GUI_USERNAME and ADMIN_GUI_PASSWORD for production.'
+          );
+        }
+      } catch (err: any) {
+        logger.error(`Failed to start Admin GUI: ${err.message}`);
+        logger.warn('Continuing without Admin GUI...');
+      }
+    } else {
+      logger.info('Admin GUI disabled (set ADMIN_GUI_ENABLED=true to enable)');
+    }
+  } catch (err: any) {
+    logger.error(`Failed to initialize database: ${err.message}`);
+    logger.error(err.stack);
+    process.exit(1);
+  }
+})();
 
 // ————————————————————————————————
 // SECURITY & MIDDLEWARE STACK
