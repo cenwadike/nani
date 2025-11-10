@@ -53,6 +53,7 @@ import { getApi } from './utils/papi';
 import storage from './utils/storage';
 import workerpool from 'workerpool';
 import os from 'os';
+import path from 'path';
 import logger from './utils/logger';
 import { ChainConfig, CHAINS } from './config';
 import { startReferendumCacheCleanup } from './plugins/activities/governance';
@@ -60,7 +61,8 @@ import { startValidatorCacheCleanup } from './plugins/activities/staking';
 import { ensurePluginsLoaded } from './utils/pluginRegistry';
 
 const numCores = os.cpus().length;
-const pool = workerpool.pool(__dirname + '/utils/pluginWorker.js', { maxWorkers: numCores });
+const workerFile = path.join(__dirname, 'utils', 'pluginWorker.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts'));
+const pool = workerpool.pool(workerFile, { maxWorkers: numCores });
 
 let serverInstance: any = null;
 let monitoringStarted = new Set<string>();
@@ -135,10 +137,12 @@ export async function startMonitoring(chain: ChainConfig) {
 
       const tasks: Promise<any>[] = [];
       for (const record of events) {
+        const safeRecord = JSON.parse(JSON.stringify(record.toJSON()));
+
         for (const { tenantId, config } of validTenants) {
           tasks.push(
             pool.exec('processPluginTask', [
-              { record, tenantId, config, chainId: chain.name, tokenSymbol: chain.tokenSymbol },
+              { record: safeRecord, tenantId, config, chainId: chain.name, tokenSymbol: chain.tokenSymbol },
             ])
           );
         }
@@ -191,10 +195,16 @@ const shutdown = async (signal: string) => {
     ensurePluginsLoaded();
     await startHttpServer();
 
-    if (!cluster.isWorker && !cluster.isPrimary) {
-      logger.info('SINGLE-PROCESS MODE → Starting monitoring for ALL chains');
-      for (const chain of CHAINS) {
-        startMonitoring(chain);
+    if (!cluster.isWorker || process.env.WORKER_TYPE === 'rest') {
+      // Determine whether clustering is enabled in the configuration (fallback to multi-core)
+      const shouldCluster = typeof (config as any).cluster === 'boolean' ? (config as any).cluster : numCores > 1;
+
+      // This runs in single-process mode OR in REST workers
+      if (!shouldCluster || process.env.FORCE_SINGLE === 'true') {
+        logger.info('SINGLE-PROCESS MODE → Starting monitoring for ALL chains');
+        for (const chain of CHAINS) {
+          startMonitoring(chain);
+        }
       }
     } else if (cluster.isWorker) {
       logger.info(`CLUSTER WORKER ${process.pid} ready → waiting for chain assignment`);
