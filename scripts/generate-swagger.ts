@@ -9,7 +9,7 @@ const options = {
     info: {
       title: 'Nani API',
       version: '1.0.0',
-      description: 'Real-Time Polkadot Event Notifications API',
+      description: 'Real-Time Polkadot Event Monitoring and Notifications API',
     },
     servers: [
       { url: 'http://localhost:3000', description: 'Local' },

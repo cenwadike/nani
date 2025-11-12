@@ -1,4 +1,4 @@
-# ⚡ Nani - Real-Time Blockchain Event Notifications
+# ⚡ Nani - Real-Time Blockchain Event Monitoring and Notifications
 
 > **The first open-source, plugin-based notification platform for Polkadot. Built for the Polkadot Cloud 2025.**
 

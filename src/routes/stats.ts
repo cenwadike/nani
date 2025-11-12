@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// This file is part of the Nani project, a Polkadot-based event notifications service.
+// This file is part of the Nani project, a Polkadot-based event monitoring and notifications service.
 //
 // Copyright (c) 2025 Nani Contributors
 //

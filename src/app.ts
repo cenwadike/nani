@@ -21,7 +21,7 @@
 
 /**
  * @file app.ts
- * @summary Express application bootstrapper for Nani – Real-Time Blockchain Event Notifications
+ * @summary Express application bootstrapper for Nani – Real-Time Blockchain Event Monitoring and Notifications
  * @description Production-grade HTTP API layer with enterprise-grade security, observability,
  *              Polkadot-branded Swagger UI, multi-tenant routing, and zero-downtime compatibility.
  *              • Cluster-aware (worker-safe initialization)
