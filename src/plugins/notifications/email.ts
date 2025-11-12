@@ -113,7 +113,7 @@ const buildHtmlTemplate = (
           <!-- Main Content -->
           <tr>
             <td style="padding:30px 20px; color:#e5e7eb;">
-              <div style="font-size:13px; color:#a0aec0; margin-bottom:15px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">
+              <div style="font-size:13px; color:#a0aec0; margin-bottom:15px; letter-spacing:1px; font-weight:600;">
                 ${greeting}
               </div>
 
