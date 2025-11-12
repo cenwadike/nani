@@ -271,7 +271,8 @@ export const loadChainConfig = async (
     logger.warn(`Config payload missing for ${tenantId}/${chainId}`);
     return null;
   }
-  return decrypt(encryptedPayload);
+  const decrypted = decrypt(encryptedPayload);
+  return decrypted;
 };
 
 /**

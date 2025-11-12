@@ -50,7 +50,7 @@ import cluster from 'cluster';
 import app from './app';
 import config from './config';
 import { getApi } from './utils/papi';
-import storage from './utils/storage';
+import storage, { loadChainConfig } from './utils/storage';
 import workerpool from 'workerpool';
 import os from 'os';
 import path from 'path';
@@ -137,12 +137,27 @@ export async function startMonitoring(chain: ChainConfig) {
 
       const tasks: Promise<any>[] = [];
       for (const record of events) {
-        const safeRecord = JSON.parse(JSON.stringify(record.toJSON()));
+        const safeRecord = {
+          phase: record.phase.toJSON(),
+          event: {
+            section: record.event.section,
+            method: record.event.method,
+            data: record.event.data.toJSON(),
+            meta: record.event.meta.toJSON(),
+          },
+          blockNumber: record.blockNumber?.toNumber() ?? null,
+        };
 
         for (const { tenantId, config } of validTenants) {
           tasks.push(
             pool.exec('processPluginTask', [
-              { record: safeRecord, tenantId, config, chainId: chain.name, tokenSymbol: chain.tokenSymbol },
+              {
+                record: safeRecord,
+                tenantId,
+                config,
+                chainId: chain.name,
+                tokenSymbol: chain.tokenSymbol,
+              },
             ])
           );
         }

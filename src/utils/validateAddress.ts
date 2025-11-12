@@ -54,52 +54,48 @@ import { encodeAddress, isAddress, decodeAddress } from '@polkadot/util-crypto';
 import { hexToU8a, isHex } from '@polkadot/util';
 import logger from './logger';
 
+const CHAIN_PREFIX: Record<string, number> = {
+  'polkadot': 0,
+  'kusama': 2,
+  'westend': 42,
+  'asset-hub-westend': 42,
+  // Add more as needed
+};
+
 // ——————————————————————————————————————
 // PUBLIC VALIDATOR — The gold standard
 // ——————————————————————————————————————
 /**
- * Validates and normalizes any Polkadot/Substrate address
+ * Validates and normalizes CHAIN-SPECIFIC SS58 prefix
  * @param address Raw user input (SS58 or hex)
  * @returns `{ isValid: boolean; polkadotAddress: string | null }`
- *          - `polkadotAddress` is always prefix 0 (Polkadot canonical)
  */
 export function isValidPolkadotAddress(
-  address: string
-): { isValid: boolean; polkadotAddress: string | null } {
-  // Trim whitespace – users copy-paste from explorers
+  address: string,
+  chainId?: string
+): { isValid: boolean; normalizedAddress: string | null } {
   const trimmed = address.trim();
-  if (!trimmed) {
-    logger.warn('Empty address provided → validation failed');
-    return { isValid: false, polkadotAddress: null };
-  }
-
-  logger.event(`Validating address: ${trimmed}`);
+  if (!trimmed) return { isValid: false, normalizedAddress: null };
 
   try {
     let publicKey: Uint8Array;
 
-    // ——— FORMAT DETECTION ———
     if (isHex(trimmed)) {
-      logger.event('Address format → HEX detected');
       publicKey = hexToU8a(trimmed);
     } else if (isAddress(trimmed)) {
-      logger.event(`Address format → SS58 detected (prefix auto-detected)`);
       publicKey = decodeAddress(trimmed);
     } else {
-      logger.error(`Invalid format: not hex or SS58 → ${trimmed}`);
-      return { isValid: false, polkadotAddress: null };
+      return { isValid: false, normalizedAddress: null };
     }
 
-    // ——— NORMALIZATION TO POLKADOT PREFIX 0 ———
-    const polkadotAddress = encodeAddress(publicKey, 0);
+    // Use chain-specific prefix, fallback to 0
+    const prefix = chainId ? CHAIN_PREFIX[chainId] ?? 0 : 0;
+    const normalizedAddress = encodeAddress(publicKey, prefix);
 
-    logger.info(`Address validated & normalized → ${polkadotAddress}`);
-    logger.event(`Original: ${trimmed} → Canonical: ${polkadotAddress}`);
-
-    return { isValid: true, polkadotAddress };
+    logger.info(`Address normalized [${chainId || 'generic'}] → ${normalizedAddress}`);
+    return { isValid: true, normalizedAddress };
   } catch (error: any) {
-    logger.error(`Address validation FAILED: ${error.message}`);
-    logger.error(`Offending input: ${trimmed}`);
-    return { isValid: false, polkadotAddress: null };
+    logger.error(`Address validation failed: ${error.message}`);
+    return { isValid: false, normalizedAddress: null };
   }
 }

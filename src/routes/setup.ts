@@ -216,9 +216,9 @@ router.post('/', async (req: Request, res: Response) => {
       if (!setup.address || typeof setup.address !== 'string') {
         throw new Error('address is required');
       }
-      const { isValid, polkadotAddress } = isValidPolkadotAddress(setup.address.trim());
-      if (!isValid || !polkadotAddress) {
-        throw new Error('Invalid Polkadot/Substrate address');
+      const { isValid, normalizedAddress } = isValidPolkadotAddress(setup.address.trim(), chain.name);
+      if (!isValid || !normalizedAddress) {
+        throw new Error('Invalid chain address');
       }
 
       // 3. Plugins root
@@ -264,7 +264,7 @@ router.post('/', async (req: Request, res: Response) => {
 
       // ——— SUCCESS: Save encrypted config ———
       const configData: TenantConfig = {
-        address: polkadotAddress,
+        address: normalizedAddress,
         chainId: chain.name,
         tokenSymbol: chain.tokenSymbol,
         plugins: {
@@ -276,11 +276,11 @@ router.post('/', async (req: Request, res: Response) => {
 
       await saveChainConfig(tenantId, chain.name, configData);
 
-      logger.event(`${prefix} → Config saved | ${polkadotAddress} → ${setup.plugins.activities.join(', ')}`);
+      logger.event(`${prefix} → Config saved | ${normalizedAddress} → ${setup.plugins.activities.join(', ')}`);
 
       result.success = true;
       result.data = {
-        address: polkadotAddress,
+        address: normalizedAddress,
         tokenSymbol: chain.tokenSymbol,
         activities: setup.plugins.activities,
         notificationsCount: setup.plugins.notifications.length,

@@ -30,6 +30,7 @@
 
 import { formatDistanceToNow } from 'date-fns';
 import { ActivityPlugin } from '../../types/pluginTypes';
+import logger from '../../utils/logger';
 
 const transfers: ActivityPlugin = {
   name: 'transfers',
@@ -43,10 +44,21 @@ const transfers: ActivityPlugin = {
     _chainId: string,
   ): boolean {
     const ev = record.event;
-    if (!ev || ev.section !== 'balances' || ev.method !== 'Transfer') return false;
+    logger.event(`[TRANSFERS] Checking: ${ev.section}.${ev.method}`);
 
-    const [from, to] = ev.data.toJSON(); // balances.Transfer → [from, to, amount]
-    return from === address || to === address;
+    if (!ev || ev.section !== 'balances' || ev.method !== 'Transfer') {
+      logger.info(`[TRANSFERS] Not a transfer → ${ev.section}.${ev.method}`);
+      return false;
+    }
+
+    const [from, to] = ev.data;
+    logger.event(`[TRANSFERS] Transfer: ${from} → ${to} | Your address: ${address}`);
+
+    const match = from === address || to === address;
+    if (!match) {
+      logger.info(`[TRANSFERS] Address not involved`);
+    }
+    return match;
   },
 
   /** --------------------------------------------------------------
@@ -59,7 +71,7 @@ const transfers: ActivityPlugin = {
     tokenSymbol: string
   ): any {
     const ev = record.event;
-    const [from, to, amount] = ev.data.toJSON();
+    const [from, to, amount] = ev.data;
 
     return {
       timestamp: new Date().toISOString(),
@@ -80,7 +92,7 @@ const transfers: ActivityPlugin = {
   formatMessage(logEntry: any, tokenSymbol: string): string {
     const { direction, amount, token, from, to, timestamp } = logEntry;
     const other = direction === 'outgoing' ? to : from;
-    const shortAddr = `${other.slice(0, 12)}...`;
+    const shortAddr = `${other.slice(0, 6)}...${other.slice(-4)}`;
     const prettyAmount = (amount / 1e12).toFixed(4).replace(/\.?0+$/, ''); // strip trailing zeros
     const timeAgo = formatDistanceToNow(new Date(timestamp), { addSuffix: true });
 
