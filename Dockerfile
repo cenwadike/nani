@@ -69,4 +69,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-CMD ["sh", "-c", "FORCE_SINGLE=true node dist/entrypoint.js"]
+CMD ["node", "dist/entrypoint.js"]
