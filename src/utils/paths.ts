@@ -68,7 +68,7 @@ import path from 'path';
 const isContainer: boolean =
   fs.existsSync('/.dockerenv') ||          // Official Docker marker
   !!process.env.FLY_APP_NAME ||            // Fly.io apps
-  !!process.env.RAILWAY_ENVIRONMENT ||     // Railway.app
+  !!process.env.RAILWAY_ENVIRONMENT_NAME ||     // Railway.app
   !!process.env.RENDER ||                  // Render.com
   process.env.NODE_ENV === 'production';   // Fallback: assume container in prod
 

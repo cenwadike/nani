@@ -70,7 +70,7 @@ const forceCluster = process.env.FORCE_CLUSTER === 'true';
 const forceSingle = process.env.FORCE_SINGLE === 'true';
 
 const isPaaS = !!(
-  process.env.RAILWAY_ENVIRONMENT ||
+  process.env.RAILWAY_ENVIRONMENT_NAME ||
   process.env.RENDER_INSTANCE_ID ||
   process.env.FLY_APP_NAME ||
   process.env.HEROKU_DYNO ||
