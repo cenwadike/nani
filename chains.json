@@ -1,18 +1,20 @@
 [
   {
     "name": "westend",
-    "rpcUrls": [
+    "endpoints": [
       "wss://westend-rpc.polkadot.io",
       "wss://westend-rpc.dwellir.com"
     ],
-    "tokenSymbol": "WND"
+    "tokenSymbol": "WND",
+    "adapterType": "substrate"
   },
   {
     "name": "asset-hub-westend",
-    "rpcUrls": [
+    "endpoints": [
       "wss://westend-asset-hub-rpc.polkadot.io",
       "wss://asset-hub-westend-rpc.dwellir.com"
     ],
-    "tokenSymbol": "WND"
+    "tokenSymbol": "WND",
+    "adapterType": "substrate"
   }
 ]

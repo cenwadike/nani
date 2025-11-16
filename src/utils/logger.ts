@@ -50,7 +50,6 @@
  *   • Railway / Docker / Kubernetes volume ready
  *   • Tamper-evident structure for audit compliance
  */
-
 import fs from 'fs';
 import path from 'path';
 import { LOG_ROOT } from './paths';
@@ -58,43 +57,70 @@ import { LOG_ROOT } from './paths';
 const FALLBACK = '/tmp/nani-logs';
 
 // ——————————————————————————————————————
-// LOG DIRECTORY RESOLUTION — Container safe
+// SINGLETON INITIALIZATION — ONE WARNING ONLY
 // ——————————————————————————————————————
 let LOG_DIR_CACHE: string | null = null;
+let INITIALIZATION_DONE = false;
 
 /**
- * Resolves writable log directory with automatic fallback
- * Ensures logs are always written even in restricted environments
+ * Initialize log directory once per process
+ * Shows success/fallback message only on first call
  */
-function getLogRoot(): string {
+function initializeLogDirectory(): string {
   if (LOG_DIR_CACHE) return LOG_DIR_CACHE;
 
   try {
+    // Try to create LOG_ROOT if it doesn't exist
+    if (!fs.existsSync(LOG_ROOT)) {
+      fs.mkdirSync(LOG_ROOT, { recursive: true, mode: 0o755 });
+    }
+    
+    // Verify write access
     fs.accessSync(LOG_ROOT, fs.constants.W_OK);
     LOG_DIR_CACHE = LOG_ROOT;
+    
+    // Success message - only once per process
+    if (!INITIALIZATION_DONE) {
+      INITIALIZATION_DONE = true;
+    }
+    
     return LOG_ROOT;
-  } catch {
-    fs.mkdirSync(FALLBACK, { recursive: true });
-    console.warn(`[logger] WARNING: No write access to ${LOG_ROOT}`);
-    console.warn(`[logger] Falling back to temporary directory: ${FALLBACK}`);
+    
+  } catch (err) {
+    // Fallback to /tmp
+    try {
+      if (!fs.existsSync(FALLBACK)) {
+        fs.mkdirSync(FALLBACK, { recursive: true });
+      }
+    } catch {
+      // /tmp should always exist, but just in case
+    }
+    
     LOG_DIR_CACHE = FALLBACK;
+    
+    // Warning - only once per process
+    if (!INITIALIZATION_DONE) {
+      console.warn(`[logger] WARNING: Cannot write to ${LOG_ROOT}`);
+      console.warn(`[logger] Using fallback: ${FALLBACK}`);
+      INITIALIZATION_DONE = true;
+    }
+    
     return FALLBACK;
   }
 }
 
+// Initialize immediately on module load (once per worker/process)
+const ACTIVE_LOG_ROOT = initializeLogDirectory();
+
 // ——————————————————————————————————————
 // DIRECTORY ENSURE — Secure + idempotent
 // ——————————————————————————————————————
-/**
- * Ensures directory exists with proper permissions
- * Uses 0o755 (rwxr-x-r-x) for security in shared environments
- */
-function ensure(dir: string): void {
+function ensureDirectory(dir: string): void {
   if (!fs.existsSync(dir)) {
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
     } catch (err) {
-      console.error(`[logger] Failed to create log directory: ${dir}`, err);
+      // Silent fail - writeLog will handle errors
     }
   }
 }
@@ -102,10 +128,6 @@ function ensure(dir: string): void {
 // ——————————————————————————————————————
 // HIGH-PRECISION TIMESTAMP
 // ——————————————————————————————————————
-/**
- * Returns current timestamp in ISO 8601 format with milliseconds
- * Example: 2025-11-10T17:46:22.789Z
- */
 function timestamp(): string {
   return new Date().toISOString();
 }
@@ -113,36 +135,30 @@ function timestamp(): string {
 // ——————————————————————————————————————
 // CORE WRITE ENGINE — Atomic + resilient
 // ——————————————————————————————————————
-/**
- * Writes a single log line with level, timestamp, and message
- * Automatically organizes by year-month and day
- * @param level Log level: 'info' | 'warn' | 'error' | 'event'
- * @param message Log message (supports template literals)
- */
 function writeLog(level: 'info' | 'warn' | 'error' | 'event', message: string): void {
-  const root = getLogRoot();
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const day = String(now.getDate()).padStart(2, '0');
 
-  const dir = path.join(root, month);
-  ensure(dir);
+  const monthDir = path.join(ACTIVE_LOG_ROOT, month);
+  ensureDirectory(monthDir);
 
-  const file = path.join(dir, `${day}.log`);
-  const line = `[${timestamp()}] [${level.toUpperCase()}] [PID:${process.pid}] ${message}\n`;
+  const logFile = path.join(monthDir, `${day}.log`);
+  const logLine = `[${timestamp()}] [${level.toUpperCase()}] [PID:${process.pid}] ${message}\n`;
 
   try {
-    fs.appendFileSync(file, line, { mode: 0o644 });
+    fs.appendFileSync(logFile, logLine, { mode: 0o644 });
   } catch (err) {
-    // Ultimate fallback: console with full context
-    console.error(`[logger] FATAL: Failed to write to ${file}`);
-    console.error(`[logger] Error:`, err);
-    console.error(`[logger] Original message: [${level.toUpperCase()}] ${message}`);
+    // Ultimate fallback: console (but don't create recursive warnings)
+    if (!message.includes('[logger]')) {
+      console.error(`[logger] FATAL: Failed to write to ${logFile}`);
+      console.error(`[logger] Original: [${level.toUpperCase()}] ${message}`);
+    }
   }
 }
 
 // ——————————————————————————————————————
-// PUBLIC LOGGER INTERFACE — Clean & intuitive
+// PUBLIC LOGGER INTERFACE
 // ——————————————————————————————————————
 export default {
   /**

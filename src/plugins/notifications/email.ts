@@ -177,6 +177,11 @@ const email: NotificationPlugin = {
         pass: config.smtp.pass,
       },
     });
+
+    transporter.verify().catch(err => {
+      logger.error(`SMTP init failed: ${err.message}`);
+    });
+
     logger.info('Email transporter initialized');
   },
 
@@ -223,7 +228,6 @@ const email: NotificationPlugin = {
       logger.info(`Email sent to ${pluginConfig.to}`);
     } catch (err: any) {
       logger.error(`Email failed to ${pluginConfig.to}: ${err.message}`);
-      throw err;
     }
   },
 

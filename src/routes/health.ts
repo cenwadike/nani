@@ -26,7 +26,7 @@
  * @summary Production-grade `/health` endpoint – The heartbeat of Nani
  * @description Real-time system observability for Kubernetes, Railway, Fly.io, Docker Swarm.
  *              Returns 200 OK only when **everything** is healthy:
- *              • All PAPI RPC nodes reachable
+ *              • All chain adapters healthy (via adapterPool)
  *              • Encrypted storage accessible
  *              • Cluster workers alive
  *              • Real 24h event/notification counters
@@ -44,7 +44,7 @@
  * @repo https://github.com/cenwadike/nani
  *
  * @features
- *   • Full PAPI chain connectivity matrix
+ *   • Adapter pool health matrix (multi-chain status)
  *   • Real-time 24h event & notification counters (from encrypted logs)
  *   • Cluster-aware: worker ID, PID, role (monitoring vs REST)
  *   • System metrics: memory (RSS), CPU load, uptime
@@ -57,13 +57,13 @@
 
 import os from 'os';
 import fs from 'fs';
-import { getApi } from '../utils/papi';
 import storage from '../utils/storage';
 import logger from '../utils/logger';
 import { CHAINS } from '../config';
 import cluster from 'cluster';
 import { Router, Request, Response } from 'express';
 import { promises as fsPromises } from 'fs';
+import adapterPool from '../utils/adapterPool';
 
 const router = Router();
 
@@ -94,7 +94,7 @@ const router = Router();
  *                   type: string
  *                   format: date-time
  *                   example: 2025-11-10T18:02:15.123Z
- *                 papi:
+ *                 status:
  *                   type: object
  *                   additionalProperties:
  *                     type: string
@@ -159,21 +159,28 @@ const router = Router();
  *                   type: string
  */
 router.get('/', async (req: Request, res: Response) => {
-  try {
-    const start = Date.now();
+  const start = Date.now();
 
+  try {
     // 1. Timestamp (UTC)
     const timestamp = new Date().toISOString();
 
-    // 2. PAPI RPC Health Matrix
-    const papiStatus: Record<string, string> = {};
+    // 2. Adapter Pool Health Matrix (replaces legacy RPC checks)
+    const adapterStats = adapterPool.getStats();
+    const status: Record<string, string> = {};
+
     for (const chain of CHAINS) {
-      try {
-        const api = await getApi(chain.name, chain.rpcUrls);
-        papiStatus[chain.name] = api.isConnected ? 'connected' : 'disconnected';
-      } catch {
-        papiStatus[chain.name] = 'disconnected';
-      }
+      const isHealthy = adapterPool.isHealthy(chain.name);
+      status[chain.name] = isHealthy ? 'connected' : 'disconnected';
+    }
+
+    // Fail fast if any chain is unhealthy
+    const allHealthy = Object.values(status).every(status => status === 'connected');
+    if (!allHealthy) {
+      throw new Error(`Chain adapter(s) unhealthy: ${Object.entries(status)
+        .filter(([_, s]) => s === 'disconnected')
+        .map(([c]) => c)
+        .join(', ')}`);
     }
 
     // 3. Real-time 24h Stats from Encrypted Logs
@@ -228,7 +235,7 @@ router.get('/', async (req: Request, res: Response) => {
     const response = {
       status: 'ok',
       timestamp,
-      papi: papiStatus,
+      chain: status,
       stats: {
         activeTenants,
         eventsProcessed24h,

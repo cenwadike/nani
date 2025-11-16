@@ -38,26 +38,40 @@ const transfers: ActivityPlugin = {
   /** --------------------------------------------------------------
    *  FILTER – does this transfer involve the tenant?
    *  -------------------------------------------------------------- */
-  filter(
-    record: any,
-    address: string,
-    _chainId: string,
-  ): boolean {
-    const ev = record.event;
-    logger.event(`[TRANSFERS] Checking: ${ev.section}.${ev.method}`);
+  filter(event: any, address: string, chainId: string): boolean {
+    logger.info(`[TRANSFERS] Filter called with chainId: ${chainId}, address: ${address}`);
 
-    if (!ev || ev.section !== 'balances' || ev.method !== 'Transfer') {
-      logger.info(`[TRANSFERS] Not a transfer → ${ev.section}.${ev.method}`);
+    // Only process on supported chains
+    const supportedChains = ['westend', 'asset-hub-westend'];
+    if (!supportedChains.includes(chainId)) {
+      logger.info(`[TRANSFERS] Chain not supported: ${chainId}`);
       return false;
     }
 
-    const [from, to] = ev.data;
-    logger.event(`[TRANSFERS] Transfer: ${from} → ${to} | Your address: ${address}`);
+    // Event is already serialized with section/method at top level
+    const eventSection = event.section;
+    const eventMethod = event.method;
+    const eventData = event.data;
+
+    logger.info(`[TRANSFERS] Event: ${eventSection}.${eventMethod}`);
+
+    if (eventSection !== 'balances' || eventMethod !== 'Transfer') {
+      logger.info(`[TRANSFERS] Not a transfer → ${eventSection}.${eventMethod}`);
+      return false;
+    }
+
+    const [from, to, amount] = eventData;
+    logger.event(`[TRANSFERS] Transfer detected: ${from} → ${to} (amount: ${amount})`);
+    logger.event(`[TRANSFERS] Checking against tenant address: ${address}`);
 
     const match = from === address || to === address;
-    if (!match) {
-      logger.info(`[TRANSFERS] Address not involved`);
+    
+    if (match) {
+      logger.event(`[TRANSFERS] ✓ MATCH! Address ${address} is involved in this transfer`);
+    } else {
+      logger.info(`[TRANSFERS] ✗ No match. From: ${from}, To: ${to}, Tenant: ${address}`);
     }
+    
     return match;
   },
 
@@ -65,41 +79,52 @@ const transfers: ActivityPlugin = {
    *  LOG – build a rich log entry
    *  -------------------------------------------------------------- */
   log(
-    record: any,
+    event: any,
     address: string,
     chainId: string,
     tokenSymbol: string
   ): any {
-    const ev = record.event;
-    const [from, to, amount] = ev.data;
+    logger.info(`[TRANSFERS] Building log entry for ${address} on ${chainId}`);
 
-    return {
+    // Handle both ChainEvent format and raw event format
+    const eventData = event.data || event.event?.data;
+    const [from, to, amount] = eventData;
+
+    const logEntry = {
       timestamp: new Date().toISOString(),
       type: 'transfer',
       chain: chainId,
       token: tokenSymbol,
       from,
       to,
-      amount,                     // planck
+      amount,
       direction: from === address ? 'outgoing' : 'incoming',
-      blockNumber: record.blockNumber?.toNumber() ?? 'unknown',
+      blockNumber: event.blockNumber || 'unknown',
     };
+
+    logger.info(`[TRANSFERS] Log entry created: ${JSON.stringify(logEntry, null, 2)}`);
+    return logEntry;
   },
 
   /** --------------------------------------------------------------
    *  MESSAGE – human readable notification
    *  -------------------------------------------------------------- */
   formatMessage(logEntry: any, tokenSymbol: string): string {
+    logger.info(`[TRANSFERS] Formatting message for notification`);
+
     const { direction, amount, token, from, to, timestamp } = logEntry;
     const other = direction === 'outgoing' ? to : from;
     const shortAddr = `${other.slice(0, 6)}...${other.slice(-4)}`;
-    const prettyAmount = (amount / 1e12).toFixed(4).replace(/\.?0+$/, ''); // strip trailing zeros
+    const prettyAmount = (amount / 1e12).toFixed(4).replace(/\.?0+$/, '');
     const timeAgo = formatDistanceToNow(new Date(timestamp), { addSuffix: true });
 
     const icon = direction === 'incoming' ? '💰' : '💸';
     const arrow = direction === 'incoming' ? 'from' : 'to';
 
-    return `${icon} ${direction.toUpperCase()} Transfer: ${prettyAmount} ${token} ${arrow} ${shortAddr} ${timeAgo}`;
+    const message = `${icon} ${direction.toUpperCase()} Transfer: ${prettyAmount} ${token} ${arrow} ${shortAddr} ${timeAgo}`;
+    
+    logger.event(`[TRANSFERS] Message formatted: ${message}`);
+    return message;
   },
 };
 

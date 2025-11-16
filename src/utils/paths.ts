@@ -54,7 +54,6 @@
  *   • Graceful fallback for edge cases
  *   • Used by logger.ts, storage.ts, config.ts, swagger loader
  */
-
 import fs from 'fs';
 import path from 'path';
 
@@ -66,11 +65,12 @@ import path from 'path';
  * Supports: Docker, Fly.io, Railway, Render, Coolify, etc.
  */
 const isContainer: boolean =
-  fs.existsSync('/.dockerenv') ||          // Official Docker marker
-  !!process.env.FLY_APP_NAME ||            // Fly.io apps
+  fs.existsSync('/.dockerenv') ||               // Official Docker marker
+  !!process.env.FLY_APP_NAME ||                 // Fly.io apps
   !!process.env.RAILWAY_ENVIRONMENT_NAME ||     // Railway.app
-  !!process.env.RENDER ||                  // Render.com
-  process.env.NODE_ENV === 'production';   // Fallback: assume container in prod
+  !!process.env.RENDER_INSTANCE_ID ||           // Render.com
+  !!process.env.HEROKU_DYNO ||                  // Heroku
+  !!process.env.KUBERNETES_SERVICE_HOST;        // Kubernetes
 
 // ——————————————————————————————————————
 // PROJECT ROOT RESOLUTION — Universal base
@@ -90,13 +90,68 @@ export const PROJECT_ROOT: string = isContainer
 /**
  * Encrypted tenant data + plugin caches
  * Mounted as persistent volume in production
- * Example: /app/data/tenants/abc123.json (AES-256-GCM)
  */
 export const DATA_ROOT: string = path.join(PROJECT_ROOT, 'data');
 
 /**
  * Structured log storage with daily rotation
- * Mounted as persistent volume for compliance + debugging
- * Format: /app/logs/2025-11/10.log
+ * Environment variable override for flexibility:
+ *   LOG_ROOT=/custom/path npm start
+ * 
+ * Priority:
+ * 1. LOG_ROOT env variable (explicit override)
+ * 2. PaaS-specific paths (Railway, Render, Fly)
+ * 3. Container: /app/logs
+ * 4. Development: ./logs
  */
-export const LOG_ROOT: string = path.join(PROJECT_ROOT, 'logs');
+export const LOG_ROOT: string = (() => {
+  // 1. Explicit override wins
+  if (process.env.LOG_ROOT) {
+    return process.env.LOG_ROOT;
+  }
+
+  // 2. PaaS environments often don't have writable /app/logs
+  //    Use /tmp for ephemeral or check for volume mounts
+  if (process.env.RAILWAY_ENVIRONMENT_NAME) {
+    // Railway: use /tmp unless volume is mounted at /data
+    return process.env.RAILWAY_VOLUME_MOUNT_PATH 
+      ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'logs')
+      : '/tmp/nani-logs';
+  }
+
+  if (process.env.RENDER_INSTANCE_ID) {
+    // Render: use /opt/render/project/logs if writable
+    const renderLogs = '/opt/render/project/logs';
+    try {
+      if (!fs.existsSync(renderLogs)) {
+        fs.mkdirSync(renderLogs, { recursive: true });
+      }
+      fs.accessSync(renderLogs, fs.constants.W_OK);
+      return renderLogs;
+    } catch {
+      return '/tmp/nani-logs';
+    }
+  }
+
+  if (process.env.FLY_APP_NAME) {
+    // Fly.io: use /data/logs if volume mounted, else /tmp
+    return fs.existsSync('/data') ? '/data/logs' : '/tmp/nani-logs';
+  }
+
+  // 3. Container default: try /app/logs, fallback to /tmp
+  if (isContainer) {
+    const appLogs = path.join(PROJECT_ROOT, 'logs');
+    try {
+      if (!fs.existsSync(appLogs)) {
+        fs.mkdirSync(appLogs, { recursive: true, mode: 0o755 });
+      }
+      fs.accessSync(appLogs, fs.constants.W_OK);
+      return appLogs;
+    } catch {
+      return '/tmp/nani-logs';
+    }
+  }
+
+  // 4. Development: project root
+  return path.join(PROJECT_ROOT, 'logs');
+})();

@@ -47,19 +47,21 @@ import type { Worker } from 'cluster';
 import os from 'os';
 import logger from './utils/logger';
 import { loadPlugins } from './utils/pluginRegistry';
-import { CHAINS, ChainConfig } from './config';
+import { CHAINS,  } from './config';
+import { ChainAdapterConfig } from './types/adapterTypes';
+import { loadAdapters } from './utils/adapterRegistry';
 
-// Extend ChainConfig to track worker assignment (in-memory only)
-interface AssignedChainConfig extends ChainConfig {
-  assignedWorkerId?: number;
-}
+// Extend ChainAdapterConfig to track worker assignment (in-memory only)
+interface AssignedChainConfig extends ChainAdapterConfig {}
 
 // Cast CHAINS to allow mutation for worker assignment tracking
 const assignedChains = CHAINS as AssignedChainConfig[];
 
 // Load all plugins at startup (hot-reload ready)
 loadPlugins();
+loadAdapters();
 
+// Get number of CPU cores for clustering
 const numCPUs = os.cpus().length;
 
 // ──────────────────────────────────────────────────────────────

@@ -56,116 +56,120 @@ import { getPlugin, ensurePluginsLoaded } from '../utils/pluginRegistry';
 import { ActivityPlugin, NotificationPlugin } from '../types/pluginTypes';
 import logger from './logger';
 
-// ——————————————————————————————————————
-// WORKER-LEVEL PLUGIN INITIALIZATION
-// ——————————————————————————————————————
+// CRITICAL: Log immediately on worker boot
+logger.info(`[WORKER ${process.pid}] ============================================`);
+logger.info(`[WORKER ${process.pid}] Plugin worker booting...`);
+logger.info(`[WORKER ${process.pid}] ============================================`);
+
 /**
- * Main task executor: processes one blockchain event for one tenant
- * Runs in isolated worker thread → safe from memory leaks or crashes
- * @param task Event payload with full context
- * @returns Promise.allSettled() of all notification dispatches
+ * Main task executor with diagnostic logging
  */
 async function processPluginTask(task: {
-  record: any;
+  event: any;
   tenantId: string;
   config: any;
   chainId: string;
   tokenSymbol: string;
 }): Promise<any[]> {
-  // Critical: ensure plugins are loaded in this worker's context
-  // Each worker has its own Node.js event loop and module cache
   ensurePluginsLoaded();
 
-  const { record, tenantId, config, chainId, tokenSymbol } = task;
+  const { event, config, chainId, tokenSymbol } = task;
   const { address, plugins } = config;
 
-  // ——— EARLY VALIDATION — Prevent unnecessary work ———
+ // Validation
   if (!address || !plugins || !plugins.activities?.length) {
-    logger.warn(`Tenant ${tenantId} has no address or activity plugins → skipping`);
+    console.warn(`[WORKER ${process.pid}] ⚠️ Missing config - skipping`);
     return [];
   }
 
-  logger.event(
-    `Worker ${process.pid} → Processing event for tenant ${tenantId} ` +
-    `on ${chainId} (${tokenSymbol}) ` +
-    `with ${plugins.activities.length} activity plugin(s)`
-  );
-
   const notificationResults: Promise<any>[] = [];
 
-  // ——— ACTIVITY PLUGIN PIPELINE — Filter → Log → Format ———
-  for (const activityName of plugins.activities) {
+  // Process each activity plugin
+  for (const activityName of plugins.activities) {  
     const activityPlugin = getPlugin('activities', activityName) as ActivityPlugin;
 
     if (!activityPlugin) {
-      logger.error(`Activity plugin not found: ${activityName} (tenant: ${tenantId})`);
+      console.error(`[WORKER ${process.pid}] ❌ Activity plugin not found: ${activityName}`);
       continue;
     }
 
     try {
-      // 1. Filter: does this event concern the tenant?
-      const isRelevant = await activityPlugin.filter(record, address, chainId);
-      if (!isRelevant) continue;
+      // 1. Filter
+      logger.info(`[WORKER ${process.pid}] Calling filter()...`);
+      logger.info(`[WORKER ${process.pid}] Event data: ${JSON.stringify(event, null, 2)}`);
+      
+      const isRelevant = await activityPlugin.filter(event, address, chainId);
+      
+      logger.info(`[WORKER ${process.pid}] Filter result: ${isRelevant}`);
 
-      logger.event(`Match → ${activityName} triggered for tenant ${tenantId}`);
+      if (!isRelevant) {
+        logger.info(`[WORKER ${process.pid}] Event not relevant - skipping`);
+        continue;
+      }
 
-      // 2. Log: enrich event with metadata
-      const logEntry = await activityPlugin.log(record, address, chainId, tokenSymbol);
+      logger.info(`[WORKER ${process.pid}] ✓✓✓ EVENT MATCHED! ✓✓✓`);
+      // 2. Log
+      logger.info(`[WORKER ${process.pid}] Calling log()...`);
+      const logEntry = await activityPlugin.log(event, address, chainId, tokenSymbol);
+      logger.info(`[WORKER ${process.pid}] Log entry: ${JSON.stringify(logEntry, null, 2)}`);
 
-      // 3. Format: human-readable message
+      // 3. Format message
+      logger.info(`[WORKER ${process.pid}] Calling formatMessage()...`);
       const message = await activityPlugin.formatMessage(logEntry, tokenSymbol);
+      logger.info(`[WORKER ${process.pid}] Message: ${message}`);
 
-      // ——— NOTIFICATION DISPATCH — All configured channels ———
+      // 4. Notify
       const notifConfigs = plugins.notifications || [];
-
+      logger.info(`[WORKER ${process.pid}] Dispatching to ${notifConfigs.length} notification channel(s)`);
       for (const notif of notifConfigs) {
+        logger.info(`[WORKER ${process.pid}] Loading notification plugin: ${notif.type}`);
+        
         const notifPlugin = getPlugin('notifications', notif.type) as NotificationPlugin;
 
         if (!notifPlugin) {
-          logger.error(`Notification plugin not found: ${notif.type} (tenant: ${tenantId})`);
+          logger.error(`[WORKER ${process.pid}] ❌ Notification plugin not found: ${notif.type}`);
           continue;
         }
 
-        logger.event(`Dispatching via ${notif.type} → tenant ${tenantId}`);
+        logger.info(`[WORKER ${process.pid}] Executing notification: ${notif.type}`);
+        logger.info(`[WORKER ${process.pid}] Config: ${JSON.stringify(notif.config, null, 2)}`);
 
-        // Fire and forget with error resilience
         notificationResults.push(
-          notifPlugin.execute(message, notif.config).catch((err: any) => {
-            logger.error(`Notification failed (${notif.type}): ${err.message}`);
-            return { status: 'failed', error: err.message };
-          })
+          notifPlugin.execute(message, notif.config)
+            .then((result) => {
+              logger.info(`[WORKER ${process.pid}] ✓ Notification sent via ${notif.type}`);
+              return { status: 'success', type: notif.type, result };
+            })
+            .catch((err: any) => {
+              logger.error(`[WORKER ${process.pid}] ❌ Notification failed (${notif.type}): ${err.message}`);
+              logger.error(`[WORKER ${process.pid}] Stack: ${err.stack}`);
+              return { status: 'failed', type: notif.type, error: err.message };
+            })
         );
       }
+
     } catch (err: any) {
-      logger.error(`Activity plugin ${activityName} crashed: ${err.message}`);
-      logger.error(`Stack: ${err.stack}`);
-      // Continue processing other plugins — never let one failure kill the task
+      logger.error(`[WORKER ${process.pid}] ❌ Plugin ${activityName} crashed: ${err.message}`);
+      logger.error(`[WORKER ${process.pid}] Stack: ${err.stack}`);
     }
   }
 
-  // ——— FINALIZE — Never reject, always settle ———
+  // Wait for all notifications
+  logger.info(`[WORKER ${process.pid}] Waiting for ${notificationResults.length} notification(s) to complete...`);
   const settled = await Promise.allSettled(notificationResults);
 
-  logger.info(
-    `Worker ${process.pid} → Completed task for tenant ${tenantId} ` +
-    `| ${settled.filter(r => r.status === 'fulfilled').length} delivered ` +
-    `| ${settled.filter(r => r.status === 'rejected').length} failed`
-  );
+  logger.info(`[WORKER ${process.pid}] ========== TASK COMPLETE ==========`);
+  logger.info(`[WORKER ${process.pid}] Results: ${settled.length} notification(s) processed`);
+  logger.info(`[WORKER ${process.pid}] Success: ${settled.filter(r => r.status === 'fulfilled').length}`);
+  logger.info(`[WORKER ${process.pid}] Failed: ${settled.filter(r => r.status === 'rejected').length}`);
 
   return settled;
 }
 
-// ——————————————————————————————————————
-// WORKERPOOL REGISTRATION — Public API
-// ——————————————————————————————————————
+// Register with workerpool
 workerpool.worker({
   processPluginTask,
 });
 
-// ——————————————————————————————————————
-// WORKER STARTUP CONFIRMATION
-// ——————————————————————————————————————
-logger.info(`Plugin worker ${process.pid} booted and ready`);
-logger.info(`→ Running in isolation | CPU core dedicated`);
-logger.info(`→ Plugins will auto-load on first task`);
-logger.info(`→ Ready to process real-time Polkadot events at scale`);
+logger.info(`[WORKER ${process.pid}] ✓ Worker registered and ready`);
+logger.info(`[WORKER ${process.pid}] Waiting for tasks...`);
