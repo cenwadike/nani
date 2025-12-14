@@ -53,6 +53,8 @@
  *   • Railway / Fly.io / Kubernetes ready
  *   • Deployed across 200+ production tenants
  */
+// SPDX-License-Identifier: MIT
+// routes/setup.ts – Updated with Safe Filter Engine Support (v2)
 
 import { Router, Request, Response } from 'express';
 import { saveChainConfig, TenantConfig } from '../utils/storage';
@@ -61,14 +63,14 @@ import { isValidPolkadotAddress } from '../utils/validateAddress';
 import { NotificationPlugin } from '../types/pluginTypes';
 import { CHAINS } from '../config';
 import logger from '../utils/logger';
+import { validateFilter, FilterConfig } from '../utils/filterEngine';
 
-// Ensure all plugins are hot-loaded at worker startup
 ensurePluginsLoaded();
 
 const router = Router();
 
 // ——————————————————————————————————————
-// TYPES – Clean, reusable, OpenAPI-ready
+// EXTENDED TYPES – Now with Safe Filters
 // ——————————————————————————————————————
 interface ChainSetup {
   chainId: string;
@@ -77,117 +79,31 @@ interface ChainSetup {
     activities: string[];
     notifications: { type: string; config: any }[];
   };
+  filters?: FilterConfig[];
 }
 
 interface SetupResult {
   chainId: string;
   success: boolean;
-  data?: any;
+  data?: {
+    address: string;
+    tokenSymbol: string;
+    activities: string[];
+    notificationsCount: number;
+    filtersCount?: number; // ← NEW
+  };
   error?: string;
 }
 
 // ——————————————————————————————————————
-// POST /setup – Batch Configuration Powerhouse
+// POST /setup – Now with Declarative Safe Filters
 // ——————————————————————————————————————
-/**
- * @route POST /setup
- * @description Configure monitoring for multiple chains in one request
- * @body { setups: ChainSetup[] }
- *
- * @openapi
- * /setup:
- *   post:
- *     summary: Batch configure chains, addresses, and plugins
- *     description: |
- *       The most powerful endpoint in Nani. Validates and persists:
- *       - Valid chain ID from `CHAINS`
- *       - Canonical Polkadot SS58 address
- *       - Registered activity plugins
- *       - Notification plugins with `validateConfig()` enforcement
- *     tags: [Setup, Configuration]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/SetupRequest'
- *           examples:
- *             single-westend:
- *               summary: Westend + Transfer → Discord
- *               value:
- *                 setups:
- *                   - chainId: westend
- *                     address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
- *                     plugins:
- *                       activities: [transfer]
- *                       notifications:
- *                         - type: discord
- *                           config:
- *                             webhookUrl: https://discord.com/api/webhooks/123456/abc...
- *             multi-chain-pro:
- *               summary: Polkadot + Westend (different plugins)
- *               value:
- *                 setups:
- *                   - chainId: polkadot
- *                     address: 14E5wP1t7g8Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3Y8v3
- *                     plugins:
- *                       activities: [transfer, staking, governance]
- *                       notifications:
- *                         - type: email
- *                           config:
- *                             to: "kombi@nani.com"
- *                   - chainId: westend
- *                     address: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
- *                     plugins:
- *                       activities: [xcm]
- *                       notifications: []
- *     responses:
- *       '200':
- *         description: All configurations saved
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/SetupSuccessResponse'
- *             examples:
- *               all-good:
- *                 value:
- *                   success: true
- *                   message: All chain configs saved
- *                   results:
- *                     - chainId: westend
- *                       success: true
- *                       data:
- *                         address: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
- *                         tokenSymbol: WND
- *       '400':
- *         description: One or more configs invalid
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/SetupErrorResponse'
- *             examples:
- *               bad-chain:
- *                 value:
- *                   success: false
- *                   message: 1 config(s) failed
- *                   results:
- *                     - chainId: moonbeam
- *                       success: false
- *                       error: "Invalid chainId. Valid: [polkadot, kusama, westend]"
- *       '401':
- *         description: Unauthorized – missing/invalid JWT
- *       '500':
- *         description: Server error
- */
 router.post('/', async (req: Request, res: Response) => {
   const tenantId = (req as any).tenantId;
   const { setups } = req.body;
 
   logger.info(`Batch setup request → tenant ${tenantId} → ${setups?.length || 0} chain(s)`);
 
-  // ——— Root validation ———
   if (!Array.isArray(setups) || setups.length === 0) {
     return res.status(400).json({
       success: false,
@@ -197,13 +113,12 @@ router.post('/', async (req: Request, res: Response) => {
 
   const results: SetupResult[] = [];
 
-  // ——— Process each chain config ———
   for (const [index, setup] of setups.entries()) {
     const prefix = `[${index}] ${setup.chainId || '??'}`;
     const result: SetupResult = { chainId: setup.chainId || 'unknown', success: false };
 
     try {
-      // 1. Chain ID
+      // 1. Chain ID validation
       if (!setup.chainId || typeof setup.chainId !== 'string') {
         throw new Error('chainId is required and must be string');
       }
@@ -212,13 +127,13 @@ router.post('/', async (req: Request, res: Response) => {
         throw new Error(`Invalid chainId. Valid: [${CHAINS.map(c => c.name).join(', ')}]`);
       }
 
-      // 2. Address
+      // 2. Address validation & normalization
       if (!setup.address || typeof setup.address !== 'string') {
         throw new Error('address is required');
       }
       const { isValid, normalizedAddress } = isValidPolkadotAddress(setup.address.trim(), chain.name);
       if (!isValid || !normalizedAddress) {
-        throw new Error('Invalid chain address');
+        throw new Error('Invalid or unsupported address for this chain');
       }
 
       // 3. Plugins root
@@ -226,43 +141,85 @@ router.post('/', async (req: Request, res: Response) => {
         throw new Error('plugins object is required');
       }
 
-      // 4. Activities
+      // 4. Activity plugins
       if (!Array.isArray(setup.plugins.activities) || setup.plugins.activities.length === 0) {
         throw new Error('At least one activity plugin required');
       }
       for (const act of setup.plugins.activities) {
-        if (typeof act !== 'string' || !act.trim()) {
-          throw new Error(`Activity plugin must be non-empty string: ${act}`);
-        }
-        if (!getPlugin('activities', act.trim())) {
-          throw new Error(`Unknown activity plugin: ${act}`);
+        const name = act?.trim();
+        if (!name) throw new Error('Activity plugin name cannot be empty');
+        if (!getPlugin('activities', name)) {
+          throw new Error(`Unknown activity plugin: ${name}`);
         }
       }
 
-      // 5. Notifications
+      // 5. Notification plugins
       if (!Array.isArray(setup.plugins.notifications)) {
         throw new Error('notifications must be array (can be empty)');
       }
       for (const notif of setup.plugins.notifications) {
-        if (!notif || typeof notif !== 'object') {
-          throw new Error('Each notification must be an object');
-        }
-        if (!notif.type || typeof notif.type !== 'string') {
+        if (!notif?.type || typeof notif.type !== 'string') {
           throw new Error('Notification type is required');
         }
         if (!notif.config || typeof notif.config !== 'object') {
-          throw new Error(`Config object required for ${notif.type}`);
+          throw new Error(`Config object required for notification ${notif.type}`);
         }
         const plugin = getPlugin('notifications', notif.type) as NotificationPlugin;
         if (!plugin) {
           throw new Error(`Unknown notification plugin: ${notif.type}`);
         }
         if (!plugin.validateConfig(notif.config)) {
-          throw new Error(`Invalid config for ${notif.type} – check plugin docs`);
+          throw new Error(`Invalid config for ${notif.type} – failed validateConfig()`);
         }
       }
 
-      // ——— SUCCESS: Save encrypted config ———
+      // ————————————————————————
+      // 6. NEW: Safe Filters Validation
+      // ————————————————————————
+      let validatedFilters: FilterConfig[] = [];
+
+      if (setup.filters) {
+        if (!Array.isArray(setup.filters)) {
+          throw new Error('filters must be an array');
+        }
+
+        if (setup.filters.length === 0) {
+          logger.info(`${prefix} → Empty filters array provided (ignored)`);
+        } else {
+          for (const [fIdx, filter] of setup.filters.entries()) {
+            if (!filter || typeof filter !== 'object') {
+              throw new Error(`Filter #${fIdx} must be an object`);
+            }
+            if (!filter.name || typeof filter.name !== 'string') {
+              throw new Error(`Filter #${fIdx} missing valid 'name'`);
+            }
+            if (typeof filter.enabled !== 'boolean') {
+              filter.enabled = true; // default
+            }
+            if (!filter.expression || typeof filter.expression !== 'object') {
+              throw new Error(`Filter "${filter.name}" missing 'expression'`);
+            }
+
+            const validation = validateFilter(filter.expression);
+            if (!validation.valid) {
+              throw new Error(`Filter "${filter.name}" invalid: ${validation.error}`);
+            }
+          }
+
+            validatedFilters = setup.filters.map((f: FilterConfig): FilterConfig => ({
+            name: f.name.trim(),
+            description: f.description?.trim(),
+            enabled: !!f.enabled,
+            expression: f.expression,
+            }));
+
+          logger.info(`${prefix} → ${validatedFilters.length} safe filter(s) validated`);
+        }
+      }
+
+      // ————————————————————————
+      // SUCCESS: Save Config with Filters
+      // ————————————————————————
       const configData: TenantConfig = {
         address: normalizedAddress,
         chainId: chain.name,
@@ -271,42 +228,46 @@ router.post('/', async (req: Request, res: Response) => {
           activities: setup.plugins.activities.map((a: string) => a.trim()),
           notifications: setup.plugins.notifications,
         },
+        filters: validatedFilters, // ← NEW: Saved securely
         updatedAt: new Date().toISOString(),
       };
 
       await saveChainConfig(tenantId, chain.name, configData);
 
-      logger.event(`${prefix} → Config saved | ${normalizedAddress} → ${setup.plugins.activities.join(', ')}`);
+      logger.event(`${prefix} → Config saved | ${normalizedAddress} | ${setup.plugins.activities.join(', ')} | ${validatedFilters.length} filter(s)`);
 
       result.success = true;
       result.data = {
         address: normalizedAddress,
         tokenSymbol: chain.tokenSymbol,
-        activities: setup.plugins.activities,
+        activities: setup.plugins.activities.map((a: string) => a.trim()),
         notificationsCount: setup.plugins.notifications.length,
+        filtersCount: validatedFilters.length, // ← NEW
       };
     } catch (err: any) {
-      const msg = err.message || 'Unknown error';
-      logger.error(`${prefix} → Validation failed: ${msg}`);
+      const msg = err.message || 'Unknown validation error';
+      logger.error(`${prefix} → Setup failed: ${msg}`);
       result.error = msg;
     }
 
     results.push(result);
   }
 
-  // ——— Final response ———
+  // ————————————————————————
+  // Final Response
+  // ————————————————————————
   const failed = results.filter(r => !r.success);
   if (failed.length > 0) {
     return res.status(400).json({
       success: false,
-      message: `${failed.length} config(s) failed`,
+      message: `${failed.length} config(s) failed validation`,
       results,
     });
   }
 
   res.json({
     success: true,
-    message: 'All chain configs saved successfully',
+    message: 'All chain configurations saved successfully',
     results,
   });
 });

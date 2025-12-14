@@ -55,8 +55,9 @@ import workerpool from 'workerpool';
 import { getPlugin, ensurePluginsLoaded } from '../utils/pluginRegistry';
 import { ActivityPlugin, NotificationPlugin } from '../types/pluginTypes';
 import logger from './logger';
+import { applyFilters, FilterConfig } from './filterEngine';
 
-// CRITICAL: Log immediately on worker boot
+// Log immediately on worker boot
 logger.info(`[WORKER ${process.pid}] ============================================`);
 logger.info(`[WORKER ${process.pid}] Plugin worker booting...`);
 logger.info(`[WORKER ${process.pid}] ============================================`);
@@ -74,94 +75,80 @@ async function processPluginTask(task: {
   ensurePluginsLoaded();
 
   const { event, config, chainId, tokenSymbol } = task;
-  const { address, plugins } = config;
+  const { address, plugins, filters = [] } = config; // ← Extract filters
 
- // Validation
   if (!address || !plugins || !plugins.activities?.length) {
-    console.warn(`[WORKER ${process.pid}] ⚠️ Missing config - skipping`);
+    logger.warn(`[WORKER ${process.pid}] Missing config - skipping`);
     return [];
+  }
+
+  // ————————————————————————————————
+  // 1. APPLY SAFE FILTERS FIRST (GLOBAL GATEKEEPER)
+  // ————————————————————————————————
+  const filterConfig: FilterConfig[] = filters.filter((f: any) => f.enabled);
+
+  if (filterConfig.length > 0) {
+    const passed = await applyFilters(event, chainId, address, filterConfig);
+    if (!passed) {
+      logger.info(`[WORKER ${process.pid}] Event rejected by filters`);
+      return []; // Early exit – no need to process plugins
+    }
+    logger.info(`[WORKER ${process.pid}] Event passed safe filters (${filterConfig.length} applied)`);
   }
 
   const notificationResults: Promise<any>[] = [];
 
-  // Process each activity plugin
-  for (const activityName of plugins.activities) {  
+  // ————————————————————————————————
+  // 2. PROCESS ACTIVITY PLUGINS (only log + format + notify)
+  // ————————————————————————————————
+  for (const activityName of plugins.activities) {
     const activityPlugin = getPlugin('activities', activityName) as ActivityPlugin;
 
     if (!activityPlugin) {
-      console.error(`[WORKER ${process.pid}] ❌ Activity plugin not found: ${activityName}`);
+      logger.error(`[WORKER ${process.pid}] Activity plugin not found: ${activityName}`);
       continue;
     }
 
     try {
-      // 1. Filter
-      logger.info(`[WORKER ${process.pid}] Calling filter()...`);
-      logger.info(`[WORKER ${process.pid}] Event data: ${JSON.stringify(event, null, 2)}`);
-      
-      const isRelevant = await activityPlugin.filter(event, address, chainId);
-      
-      logger.info(`[WORKER ${process.pid}] Filter result: ${isRelevant}`);
+      logger.info(`[WORKER ${process.pid}] Processing activity plugin: ${activityName}`);
 
-      if (!isRelevant) {
-        logger.info(`[WORKER ${process.pid}] Event not relevant - skipping`);
-        continue;
-      }
+      // Removed: .filter() call – now handled by filterEngine
 
-      logger.info(`[WORKER ${process.pid}] ✓✓✓ EVENT MATCHED! ✓✓✓`);
       // 2. Log
-      logger.info(`[WORKER ${process.pid}] Calling log()...`);
       const logEntry = await activityPlugin.log(event, address, chainId, tokenSymbol);
-      logger.info(`[WORKER ${process.pid}] Log entry: ${JSON.stringify(logEntry, null, 2)}`);
+      logger.info(`[WORKER ${process.pid}] Logged: ${JSON.stringify(logEntry)}`);
 
       // 3. Format message
-      logger.info(`[WORKER ${process.pid}] Calling formatMessage()...`);
       const message = await activityPlugin.formatMessage(logEntry, tokenSymbol);
-      logger.info(`[WORKER ${process.pid}] Message: ${message}`);
+      logger.info(`[WORKER ${process.pid}] Formatted: ${message}`);
 
       // 4. Notify
       const notifConfigs = plugins.notifications || [];
-      logger.info(`[WORKER ${process.pid}] Dispatching to ${notifConfigs.length} notification channel(s)`);
       for (const notif of notifConfigs) {
-        logger.info(`[WORKER ${process.pid}] Loading notification plugin: ${notif.type}`);
-        
         const notifPlugin = getPlugin('notifications', notif.type) as NotificationPlugin;
-
         if (!notifPlugin) {
-          logger.error(`[WORKER ${process.pid}] ❌ Notification plugin not found: ${notif.type}`);
+          logger.error(`[WORKER ${process.pid}] Notification plugin missing: ${notif.type}`);
           continue;
         }
 
-        logger.info(`[WORKER ${process.pid}] Executing notification: ${notif.type}`);
-        logger.info(`[WORKER ${process.pid}] Config: ${JSON.stringify(notif.config, null, 2)}`);
-
         notificationResults.push(
           notifPlugin.execute(message, notif.config)
-            .then((result) => {
-              logger.info(`[WORKER ${process.pid}] ✓ Notification sent via ${notif.type}`);
-              return { status: 'success', type: notif.type, result };
-            })
+            .then(() => ({ status: 'success', type: notif.type }))
             .catch((err: any) => {
-              logger.error(`[WORKER ${process.pid}] ❌ Notification failed (${notif.type}): ${err.message}`);
-              logger.error(`[WORKER ${process.pid}] Stack: ${err.stack}`);
+              logger.error(`[WORKER ${process.pid}] Notify failed (${notif.type}): ${err.message}`);
               return { status: 'failed', type: notif.type, error: err.message };
             })
         );
       }
 
     } catch (err: any) {
-      logger.error(`[WORKER ${process.pid}] ❌ Plugin ${activityName} crashed: ${err.message}`);
-      logger.error(`[WORKER ${process.pid}] Stack: ${err.stack}`);
+      logger.error(`[WORKER ${process.pid}] Activity plugin ${activityName} failed: ${err.message}`);
+      logger.error(err.stack);
     }
   }
 
-  // Wait for all notifications
-  logger.info(`[WORKER ${process.pid}] Waiting for ${notificationResults.length} notification(s) to complete...`);
   const settled = await Promise.allSettled(notificationResults);
-
-  logger.info(`[WORKER ${process.pid}] ========== TASK COMPLETE ==========`);
-  logger.info(`[WORKER ${process.pid}] Results: ${settled.length} notification(s) processed`);
-  logger.info(`[WORKER ${process.pid}] Success: ${settled.filter(r => r.status === 'fulfilled').length}`);
-  logger.info(`[WORKER ${process.pid}] Failed: ${settled.filter(r => r.status === 'rejected').length}`);
+  logger.info(`[WORKER ${process.pid}] Task complete – ${settled.filter(s => s.status === 'fulfilled').length} sent`);
 
   return settled;
 }
