@@ -47,23 +47,31 @@
  */
 
 import cluster from 'cluster';
+import os from 'os';
+import path from 'path';
+import workerpool from 'workerpool';
 import app from './app';
 import config from './config';
 import storage from './utils/storage';
-import workerpool from 'workerpool';
-import os from 'os';
-import path from 'path';
 import logger from './utils/logger';
+import adapterPool from './utils/adapterPool';
+import eventQueue, { QueuedEvent } from './utils/eventQueue';
+import { ChainEvent } from './types/adapterTypes';
 import { CHAINS } from './config';
-import { startReferendumCacheCleanup } from './plugins/activities/governance';
-import { startValidatorCacheCleanup } from './plugins/activities/staking';
 import { ensurePluginsLoaded } from './utils/pluginRegistry';
 import { ensureAdaptersLoaded } from './utils/adapterRegistry';
-import adapterPool from './utils/adapterPool';
-import { ChainEvent } from './types/adapterTypes';
+import { startReferendumCacheCleanup } from './plugins/activities/governance';
+import { startValidatorCacheCleanup } from './plugins/activities/staking';
+
+// Import scheduled tasks
+import './jobs/scheduledTasks';
 
 const numCores = os.cpus().length;
-const workerFile = path.join(__dirname, 'utils', 'pluginWorker.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts'));
+const workerFile = path.join(
+  __dirname, 
+  'utils', 
+  'pluginWorker.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts')
+);
 
 logger.info(`Creating worker pool with ${numCores} workers from: ${workerFile}`);
 
@@ -77,32 +85,37 @@ const pool = workerpool.pool(workerFile, {
 
 let serverInstance: any = null;
 let monitoringStarted = false;
+let memoryCheckInterval: NodeJS.Timeout | null = null;
 
-/**
- * Serialize Polkadot.js event data to plain JSON
- * Converts all Codec types to strings/numbers/objects
- */
+// ————————————————————————————————
+// EVENT SERIALIZATION
+// ————————————————————————————————
 function serializeEventData(data: any): any {
-  if (!data) return data;
+  if (!data) return null;
 
-  // Handle arrays
   if (Array.isArray(data)) {
-    return data.map(item => serializeEventData(item));
+    const result = data.map(item => serializeEventData(item));
+    data.length = 0;
+    return result;
   }
 
-  // Handle Polkadot.js Codec types (they have .toJSON() or .toString())
   if (data && typeof data === 'object') {
-    // Check if it's a Codec type with toJSON method
     if (typeof data.toJSON === 'function') {
-      return data.toJSON();
+      const json = data.toJSON();
+      Object.keys(data).forEach(key => {
+        try { data[key] = null; } catch {}
+      });
+      return json;
     }
     
-    // Check if it's a Codec type with toString method
     if (typeof data.toString === 'function' && data.constructor.name !== 'Object') {
-      return data.toString();
+      const str = data.toString();
+      Object.keys(data).forEach(key => {
+        try { data[key] = null; } catch {}
+      });
+      return str;
     }
 
-    // Handle plain objects recursively
     const result: any = {};
     for (const key in data) {
       if (data.hasOwnProperty(key)) {
@@ -115,24 +128,30 @@ function serializeEventData(data: any): any {
   return data;
 }
 
-/**
- * Convert ChainEvent to JSON-serializable format
- */
 function serializeChainEvent(event: ChainEvent): any {
-  return {
+  const serialized = {
     eventName: event.eventName,
     section: event.section,
     method: event.method,
     data: serializeEventData(event.data),
-    raw: serializeEventData(event.raw),
     blockNumber: event.blockNumber,
     blockHash: event.blockHash,
   };
+
+  if (event.raw) {
+    try {
+      Object.keys(event.raw).forEach(key => {
+        (event.raw as any)[key] = null;
+      });
+    } catch {}
+  }
+
+  return serialized;
 }
 
-/**
- * Starts the Express HTTP server
- */
+// ————————————————————————————————
+// HTTP SERVER
+// ————————————————————————————————
 function startHttpServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     const port = config.port;
@@ -148,9 +167,64 @@ function startHttpServer(): Promise<void> {
   });
 }
 
-/**
- * Starts blockchain monitoring using adapter pool
- */
+// ————————————————————————————————
+// MEMORY MONITORING
+// ————————————————————————————————
+function startMemoryMonitoring(): void {
+  memoryCheckInterval = setInterval(() => {
+    const usage = process.memoryUsage();
+    const heapUsedMB = Math.round(usage.heapUsed / 1024 / 1024);
+    const heapTotalMB = Math.round(usage.heapTotal / 1024 / 1024);
+    const externalMB = Math.round(usage.external / 1024 / 1024);
+    
+    logger.info(
+      `Memory: ${heapUsedMB}MB / ${heapTotalMB}MB (External: ${externalMB}MB)`
+    );
+
+    const queueStats = eventQueue.getStats();
+    logger.info(
+      `Queue: ${queueStats.size} pending | ` +
+      `${queueStats.processed} processed | ` +
+      `${queueStats.dropped} dropped | ` +
+      `${queueStats.deduplicated} deduplicated`
+    );
+
+    const heapUsagePercent = (usage.heapUsed / usage.heapTotal) * 100;
+    if (heapUsagePercent > 80 && global.gc) {
+      logger.warn(`High heap usage (${heapUsagePercent.toFixed(1)}%) - forcing GC`);
+      global.gc();
+    }
+
+    if (heapUsedMB > 3500) {
+      logger.error(`MEMORY PRESSURE: ${heapUsedMB}MB - near limit!`);
+    }
+  }, 30000);
+}
+
+// ————————————————————————————————
+// EVENT PROCESSING
+// ————————————————————————————————
+async function processQueuedEvent(item: QueuedEvent): Promise<void> {
+  const taskPayload = {
+    event: item.event,
+    tenantId: item.tenantId,
+    config: item.config,
+    chainId: item.chainId,
+    tokenSymbol: item.tokenSymbol,
+  };
+
+  try {
+    const result = await pool.exec('processPluginTask', [taskPayload]);
+    logger.info(`Task completed for ${item.tenantId}: ${JSON.stringify(result)}`);
+  } catch (err: any) {
+    logger.error(`Task failed for ${item.tenantId}: ${err.message}`);
+    throw err;
+  }
+}
+
+// ————————————————————————————————
+// BLOCKCHAIN MONITORING
+// ————————————————————————————————
 export async function startMonitoring() {
   if (monitoringStarted) {
     logger.info('Monitoring already active');
@@ -160,22 +234,35 @@ export async function startMonitoring() {
   logger.event('Starting multi-chain monitoring via adapter pool...');
   startReferendumCacheCleanup();
   startValidatorCacheCleanup();
+  startMemoryMonitoring();
+
+  eventQueue.on('process', async (item: QueuedEvent) => {
+    try {
+      await processQueuedEvent(item);
+    } catch (err: any) {
+      logger.error(`Queue processor error: ${err.message}`);
+      throw err;
+    }
+  });
+
+  eventQueue.on('overflow', ({ chainName, event }: any) => {
+    logger.error(
+      `QUEUE OVERFLOW: Dropped event from ${chainName} block ${event.blockNumber}`
+    );
+  });
 
   try {
-    // Initialize adapter pool for all configured chains
     await adapterPool.initializeAll(CHAINS, async (chainName: string, event: ChainEvent) => {
       logger.event(`${chainName}: New event → ${event.eventName}`);
 
-      // Get all tenants
+      const serializedEvent = serializeChainEvent(event);
       const tenantIds = await storage.getAllTenants();
+      
       if (tenantIds.length === 0) {
-        logger.info(`Found 0 tenants`);
+        logger.info(`No tenants configured`);
         return;
       }
 
-      logger.info(`Found ${tenantIds.length} tenants`);
-
-      // Get tenant configurations for this chain
       const tenantConfigs = await Promise.all(
         tenantIds.map(async (tenantId) => {
           const cfg = await storage.loadChainConfig(tenantId, chainName);
@@ -193,67 +280,37 @@ export async function startMonitoring() {
         return;
       }
 
-      logger.event(`Processing event for ${validTenants.length} tenant(s) on ${chainName}`);
+      logger.event(`Queueing event for ${validTenants.length} tenant(s) on ${chainName}`);
 
-      // Get chain config for token symbol
       const chainConfig = CHAINS.find(c => c.name === chainName);
       if (!chainConfig) {
         logger.warn(`Chain config not found for ${chainName}`);
         return;
       }
 
-      // ⚡ CRITICAL: Serialize event to plain JSON before sending to workers
-      const serializedEvent = serializeChainEvent(event);
-
-      // Dispatch to plugin workers
-      const tasks: Promise<any>[] = [];
       for (const { tenantId, config } of validTenants) {
-        logger.info(`Dispatching task to worker pool for tenant ${tenantId}`);
-        
-        const taskPayload = {
-          event: serializedEvent, // ✅ Now JSON-serializable
+        const success = eventQueue.enqueue(
+          chainName,
+          serializedEvent,
           tenantId,
           config,
-          chainId: chainName,
-          tokenSymbol: chainConfig.tokenSymbol,
-        };
+          chainName,
+          chainConfig.tokenSymbol
+        );
 
-        logger.info(`Task payload: ${JSON.stringify({
-          eventName: serializedEvent.eventName,
-          tenantId,
-          chainId: chainName,
-          tokenSymbol: chainConfig.tokenSymbol,
-          hasConfig: !!config,
-        })}`);
-
-        // Execute in worker pool
-        const taskPromise = pool.exec('processPluginTask', [taskPayload])
-          .then((result) => {
-            logger.info(`Task completed for tenant ${tenantId}: ${JSON.stringify(result)}`);
-            return result;
-          })
-          .catch((err: any) => {
-            logger.error(`Task failed for tenant ${tenantId}: ${err.message}`);
-            logger.error(`Stack: ${err.stack}`);
-            return { status: 'error', error: err.message };
-          });
-
-        tasks.push(taskPromise);
+        if (!success) {
+          logger.error(`Failed to enqueue event for tenant ${tenantId}`);
+        }
       }
 
-      // Wait for all tasks to complete
-      const results = await Promise.allSettled(tasks);
-      
-      const fulfilled = results.filter(r => r.status === 'fulfilled').length;
-      const rejected = results.filter(r => r.status === 'rejected').length;
-      
-      logger.info(`Event processing complete: ${fulfilled} succeeded, ${rejected} failed`);
+      (serializedEvent as any) = null;
+      (tenantConfigs as any) = null;
+      (validTenants as any) = null;
     });
 
     monitoringStarted = true;
     logger.info('✓ Multi-chain monitoring started successfully');
 
-    // Log adapter pool stats
     const stats = adapterPool.getStats();
     logger.info(
       `Adapter pool: ${stats.healthy}/${stats.total} adapters healthy`
@@ -266,13 +323,17 @@ export async function startMonitoring() {
   }
 }
 
-/**
- * Graceful shutdown with adapter cleanup
- */
+// ————————————————————————————————
+// GRACEFUL SHUTDOWN
+// ————————————————————————————————
 const shutdown = async (signal: string) => {
   logger.info(`Received ${signal} — Starting graceful shutdown (PID: ${process.pid})`);
 
-  // 1. Stop HTTP server
+  if (memoryCheckInterval) {
+    clearInterval(memoryCheckInterval);
+    logger.info('Memory monitoring stopped');
+  }
+
   if (serverInstance) {
     logger.info('Closing HTTP server...');
     await new Promise<void>((resolve) => {
@@ -284,7 +345,11 @@ const shutdown = async (signal: string) => {
     });
   }
 
-  // 2. Disconnect adapter pool
+  logger.info('Clearing event queue...');
+  const queueStats = eventQueue.getStats();
+  logger.info(`Final queue stats: ${JSON.stringify(queueStats)}`);
+  eventQueue.clear();
+
   logger.info('Disconnecting adapter pool...');
   try {
     await adapterPool.shutdown();
@@ -293,13 +358,17 @@ const shutdown = async (signal: string) => {
     logger.warn(`Adapter pool shutdown error: ${err.message}`);
   }
 
-  // 3. Terminate worker pool
   logger.info('Terminating worker pool...');
   try {
-    await pool.terminate();
+    await pool.terminate(true, 10000);
     logger.info('Worker pool terminated');
   } catch (err) {
     logger.warn(`Worker pool terminate error: ${(err as Error).message}`);
+  }
+
+  if (global.gc) {
+    logger.info('Running final garbage collection...');
+    global.gc();
   }
 
   logger.info(`Worker ${process.pid} shutdown complete`);
@@ -311,7 +380,6 @@ const shutdown = async (signal: string) => {
 // ————————————————————————————————
 (async () => {
   try {
-    // Load adapters and plugins
     ensureAdaptersLoaded();
     ensurePluginsLoaded();
 
@@ -332,7 +400,6 @@ const shutdown = async (signal: string) => {
       logger.info(`CLUSTER PRIMARY ${process.pid} managing workers`);
     }
 
-    // Worker message handling - for cluster mode chain assignment
     if (cluster.isWorker) {
       process.on('message', async (msg: any) => {
         if (msg?.type === 'start-monitoring') {
@@ -346,12 +413,21 @@ const shutdown = async (signal: string) => {
       });
     }
 
-    // Graceful shutdown handlers
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGHUP', () => shutdown('SIGHUP'));
 
-    // Primary: Auto-restart dead workers
+    process.on('uncaughtException', (err) => {
+      logger.error(`Uncaught exception: ${err.message}`);
+      logger.error(err.stack!);
+      shutdown('UNCAUGHT_EXCEPTION');
+    });
+
+    process.on('unhandledRejection', (reason: any) => {
+      logger.error(`Unhandled rejection: ${reason}`);
+      if (reason?.stack) logger.error(reason.stack);
+    });
+
     if (cluster.isPrimary) {
       cluster.on('exit', (worker, code, signal) => {
         if (!worker.exitedAfterDisconnect) {

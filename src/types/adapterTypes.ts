@@ -59,7 +59,7 @@ export interface ChainAdapter {
   displayName: string;
 
   /** Chain type this adapter supports */
-  chainType: 'substrate' | 'evm' | 'cosmos' | 'solana' | 'custom';
+  chainType: 'bitcoin' | 'substrate' | 'evm' | 'cosmos' | 'solana' | 'custom';
 
   /** Supported chain identifiers (e.g., ['polkadot', 'kusama']) */
   supportedChains: string[];

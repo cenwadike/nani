@@ -181,18 +181,18 @@ export class SubstrateAdapter implements ChainAdapter {
             // Apply filters
             if (options?.filters) {
             const { sections, methods } = options.filters;
-            if (sections && !sections.includes(event.section)) continue;
-            if (methods && !methods.includes(event.method)) continue;
+              if (sections && !sections.includes(event.section)) continue;
+              if (methods && !methods.includes(event.method)) continue;
             }
 
             const chainEvent: ChainEvent = {
-            eventName: `${event.section}.${event.method}`,
-            section: event.section,
-            method: event.method,
-            data: event.data,
-            raw: record.toJSON(),
-            blockNumber,
-            blockHash,
+              eventName: `${event.section}.${event.method}`,
+              section: event.section,
+              method: event.method,
+              data: event.data,
+              raw: record.toJSON(),
+              blockNumber,
+              blockHash,
             };
 
             await callback(chainEvent);

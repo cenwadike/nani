@@ -61,6 +61,7 @@ import path from 'path';
 import { promises as fsPromises } from 'fs';
 import CryptoJS from 'crypto-js';
 import { DATA_ROOT } from '../utils/paths';
+import { createFingerprint, checkTrialAbuse } from '../services/fraudDetection';
 
 const router = Router();
 
@@ -172,7 +173,23 @@ router.post('/', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Valid email address required' });
       }
 
-      const tenantId = crypto.createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 16);
+      // Check for abuse before creating account
+      const fingerprint = createFingerprint(req);
+      const fraudCheck = await checkTrialAbuse(email, fingerprint);
+
+      if (!fraudCheck.allowed && fraudCheck.riskScore >= 90) {
+        logger.warn(`Auth blocked for ${email}: ${fraudCheck.reason}`);
+        return res.status(403).json({
+          error: 'Account creation unavailable',
+          message: 'Please contact support@nani.dev'
+        });
+      }
+
+      const tenantId = crypto.createHash('sha256')
+        .update(email.trim().toLowerCase())
+        .digest('hex')
+        .slice(0, 16);
+
       const token = jwt.sign(
         { tenantId, email: email.trim().toLowerCase(), method: 'email' },
         config.jwtSecret,
@@ -185,10 +202,13 @@ router.post('/', async (req: Request, res: Response) => {
           email: email.trim().toLowerCase(),
           createdAt: new Date().toISOString(),
           authMethod: 'email',
+          fingerprint: fingerprint.fingerprintHash,
+          ip: fingerprint.ip,
+          riskScore: fraudCheck.riskScore
         });
       }
 
-      logger.event(`Email auth success → ${email} → ${tenantId}`);
+      logger.event(`Email auth success → ${email} → ${tenantId} (risk: ${fraudCheck.riskScore})`);
       return res.json({ token, tenantId, method: 'email' });
     }
 

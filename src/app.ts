@@ -47,42 +47,52 @@
  *   • Railway / Docker / Fly.io / Render / VPS ready
  *   • Zero global side effects — safe for cluster forks
  */
+// ============================================================================
+// FILE 33: src/app.ts - COMPREHENSIVE EXPRESS APPLICATION
+// ============================================================================
 
+// SPDX-License-Identifier: MIT
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import path from 'path';
+import swaggerUi from 'swagger-ui-express';
 import { limiter, verifyToken } from './middlewares/auth';
 import errorHandler from './middlewares/errorHandler';
+import { enforceTrialLimits } from './middlewares/trialEnforcement';
+import { initializeMonitoring } from './monitoring/metrics';
+import { performanceMiddleware } from './monitoring/performance';
+import storage from './utils/storage';
+import logger from './utils/logger';
+import { loadSwaggerDocument } from './utils/swagger';
+
+// Import all routes
 import authRouter from './routes/auth';
 import setupRouter from './routes/setup';
-import statsRouter from './routes/stats';
 import exportRouter from './routes/export';
 import healthRouter from './routes/health';
-import logger from './utils/logger';
-import swaggerUi from 'swagger-ui-express';
-import { loadSwaggerDocument } from './utils/swagger';
-import path from 'path';
-import storage from './utils/storage';
+import trialRouter from './routes/trial';
+import analyticsRouter from './routes/analytics';
+import alertsRouter from './routes/alerts';
+import x402Router from './routes/x402';
 
 const app: Application = express();
 
 // ————————————————————————————————
 // DATABASE INITIALIZATION
 // ————————————————————————————————
-var dbInitialized = false;
+let dbInitialized = false;
 
 (async () => {
   try {
     logger.info('Starting database initialization...');
     
-    // Ensure database is initialized before starting server
     await storage.initDb();
     logger.info('✓ AceBase database initialized successfully');
 
-    // Initialize empty data structure to prevent null reference errors
     const db = storage.getDb();
     
-    // Check if configs exist, if not create empty structure
+    // Initialize empty structures
     try {
       const configsSnapshot = await db.ref('configs').get();
       if (!configsSnapshot.exists()) {
@@ -91,11 +101,9 @@ var dbInitialized = false;
       }
     } catch (err: any) {
       logger.warn(`Could not check configs: ${err.message}`);
-      // Create empty structure on error
       await db.ref('configs').set({}).catch(() => {});
     }
 
-    // Check if logs exist, if not create empty structure
     try {
       const logsSnapshot = await db.ref('logs').get();
       if (!logsSnapshot.exists()) {
@@ -104,14 +112,13 @@ var dbInitialized = false;
       }
     } catch (err: any) {
       logger.warn(`Could not check logs: ${err.message}`);
-      // Create empty structure on error
       await db.ref('logs').set({}).catch(() => {});
     }
 
     dbInitialized = true;
     logger.info('✓ Database structure initialized');
 
-    // Start Admin GUI if enabled (AFTER data structure is ready)
+    // Start Admin GUI if enabled
     const adminGuiEnabled = process.env.ADMIN_GUI_ENABLED === 'true';
     
     if (adminGuiEnabled) {
@@ -147,15 +154,21 @@ var dbInitialized = false;
 })();
 
 // ————————————————————————————————
+// INITIALIZE MONITORING
+// ————————————————————————————————
+initializeMonitoring();
+
+// ————————————————————————————————
 // SECURITY & MIDDLEWARE STACK
 // ————————————————————————————————
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(limiter);
+app.use(performanceMiddleware);
 
 // ————————————————————————————————
-// CLUSTER-AWARE REQUEST LOGGING
+// REQUEST LOGGING
 // ————————————————————————————————
 logger.info(`Worker ${process.pid} initializing Express app...`);
 
@@ -165,30 +178,33 @@ app.use((req: Request, res: Response, next: Function) => {
 });
 
 // ————————————————————————————————
-// ROUTES — PUBLIC & PROTECTED
+// PUBLIC ROUTES
 // ————————————————————————————————
-app.use('/health', healthRouter);                    // Public: liveness/readiness probes
-app.use('/auth', authRouter);                        // Public: login, register, token refresh
-app.use('/setup', verifyToken, setupRouter);         // Protected: tenant configuration
-app.use('/stats', verifyToken, statsRouter);         // Protected: analytics dashboard
-app.use('/export', verifyToken, exportRouter);       // Protected: data export endpoints
+app.use('/health', healthRouter);
+app.use('/auth', authRouter);
+app.use('/api/trial', trialRouter);
+app.use('/api/x402', x402Router);
+
+// ————————————————————————————————
+// PROTECTED ROUTES (Require JWT)
+// ————————————————————————————————
+app.use('/setup', verifyToken, setupRouter);
+app.use('/export', verifyToken, exportRouter);
+
+// ————————————————————————————————
+// PROTECTED ROUTES (Require JWT + Trial Check)
+// ————————————————————————————————
+app.use('/api/analytics', verifyToken, enforceTrialLimits, analyticsRouter);
+app.use('/api/alerts', verifyToken, enforceTrialLimits, alertsRouter);
+app.use('/stats', verifyToken, enforceTrialLimits, analyticsRouter);
 
 // ————————————————————————————————
 // SWAGGER UI — POLKADOT CLOUD THEMED
 // ————————————————————————————————
 const swaggerOptions = {
   customCss: `
-    /* Hide default topbar */
-    .swagger-ui .topbar { 
-      display: none; 
-    }
-
-    /* Main container styling */
-    .swagger-ui {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    /* Info section (title, description) */
+    .swagger-ui .topbar { display: none; }
+    .swagger-ui { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     .swagger-ui .info { 
       margin: 50px 0;
       background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
@@ -196,7 +212,6 @@ const swaggerOptions = {
       border-radius: 12px;
       color: white;
     }
-    
     .swagger-ui .info .title { 
       font-size: 3em;
       color: white !important;
@@ -205,7 +220,6 @@ const swaggerOptions = {
       margin-bottom: 20px;
       text-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
-
     .swagger-ui .info .title small {
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
@@ -215,390 +229,42 @@ const swaggerOptions = {
       margin-left: 15px;
       font-weight: 600;
     }
-
-    .swagger-ui .info .description {
-      color: rgba(255, 255, 255, 0.95) !important;
-      font-size: 1.1em;
-      line-height: 1.6;
-    }
-
-    .swagger-ui .info .description p {
-      color: rgba(255, 255, 255, 0.95) !important;
-    }
-
-    .swagger-ui .info .description a {
-      color: white !important;
-      text-decoration: underline;
-      font-weight: 600;
-    }
-
-    /* Scheme container (server URLs) */
-    .swagger-ui .scheme-container {
-      background: linear-gradient(135deg, rgba(230, 0, 122, 0.1) 0%, rgba(85, 43, 191, 0.1) 100%);
-      border: 2px solid #E6007A;
-      border-radius: 8px;
-      padding: 20px;
-      margin: 30px 0;
-    }
-
-    .swagger-ui .scheme-container .schemes {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .swagger-ui .scheme-container select {
-      background: white;
-      border: 2px solid #E6007A;
-      border-radius: 6px;
-      padding: 8px 12px;
-      font-weight: 600;
-      color: #E6007A;
-      cursor: pointer;
-    }
-
-    /* Operation blocks (endpoints) */
-    .swagger-ui .opblock {
-      border-radius: 8px;
-      margin-bottom: 20px;
-      border: 2px solid transparent;
-      transition: all 0.3s ease;
-    }
-
-    .swagger-ui .opblock:hover {
-      box-shadow: 0 4px 20px rgba(230, 0, 122, 0.15);
-      transform: translateY(-2px);
-    }
-
-    /* POST endpoints (pink/primary) */
-    .swagger-ui .opblock.opblock-post {
-      border-color: #E6007A;
-      background: rgba(230, 0, 122, 0.05);
-    }
-
-    .swagger-ui .opblock.opblock-post .opblock-summary {
-      background: rgba(230, 0, 122, 0.1);
-      border-color: #E6007A;
-    }
-
-    .swagger-ui .opblock.opblock-post .opblock-summary-method {
-      background: #E6007A;
-      color: white;
-      font-weight: 700;
-    }
-
-    /* GET endpoints (purple/secondary) */
-    .swagger-ui .opblock.opblock-get {
-      border-color: #552BBF;
-      background: rgba(85, 43, 191, 0.05);
-    }
-
-    .swagger-ui .opblock.opblock-get .opblock-summary {
-      background: rgba(85, 43, 191, 0.1);
-      border-color: #552BBF;
-    }
-
-    .swagger-ui .opblock.opblock-get .opblock-summary-method {
-      background: #552BBF;
-      color: white;
-      font-weight: 700;
-    }
-
-    /* Tag sections (grouped endpoints) */
-    .swagger-ui .opblock-tag {
-      border-bottom: 3px solid #E6007A;
-      padding: 15px 0;
-      margin-bottom: 20px;
-    }
-
-    .swagger-ui .opblock-tag-section h3 {
-      font-size: 1.8em;
-      color: #E6007A;
-      font-weight: 700;
-    }
-
-    /* Try it out button */
-    .swagger-ui .btn.try-out__btn {
-      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
-      color: white;
-      border: none;
-      font-weight: 700;
-      padding: 8px 20px;
-      border-radius: 6px;
-      transition: all 0.3s ease;
-    }
-
-    .swagger-ui .btn.try-out__btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(230, 0, 122, 0.3);
-    }
-
-    /* Execute button */
-    .swagger-ui .btn.execute {
-      background: #E6007A;
-      color: white;
-      border: none;
-      font-weight: 700;
-      padding: 10px 30px;
-      border-radius: 6px;
-      transition: all 0.3s ease;
-    }
-
-    .swagger-ui .btn.execute:hover {
-      background: #552BBF;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(230, 0, 122, 0.3);
-    }
-
-    /* Cancel button */
-    .swagger-ui .btn.cancel {
-      border: 2px solid #E6007A;
-      color: #E6007A;
-      font-weight: 600;
-    }
-
-    /* Authorization button */
-    .swagger-ui .authorization__btn {
-      background: transparent;
-      border: 2px solid #E6007A;
-      color: #E6007A;
-      font-weight: 700;
-      border-radius: 6px;
-      padding: 8px 20px;
-      transition: all 0.3s ease;
-    }
-
-    .swagger-ui .authorization__btn:hover {
-      background: #E6007A;
-      color: white;
-    }
-
-    .swagger-ui .authorization__btn.locked {
-      background: #E6007A;
-      color: white;
-      border-color: #E6007A;
-    }
-
-    /* Authorize modal */
-    .swagger-ui .modal-ux {
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    .swagger-ui .modal-ux-header {
-      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
-      border-bottom: none;
-      padding: 20px;
-    }
-
-    .swagger-ui .modal-ux-header h3 {
-      color: white;
-      font-weight: 700;
-    }
-
-    .swagger-ui .modal-ux-content {
-      padding: 30px;
-    }
-
-    /* Response section */
-    .swagger-ui .responses-wrapper {
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .swagger-ui .responses-inner h4,
-    .swagger-ui .responses-inner h5 {
-      color: #E6007A;
-      font-weight: 700;
-    }
-
-    /* Code snippets */
-    .swagger-ui .highlight-code {
-      background: #1a1a2e !important;
-      border-radius: 6px;
-    }
-
-    .swagger-ui .highlight-code pre {
-      background: #1a1a2e !important;
-      color: #fff;
-    }
-
-    /* Model section */
-    .swagger-ui .model-box {
-      background: rgba(230, 0, 122, 0.05);
-      border-radius: 6px;
-      border: 1px solid rgba(230, 0, 122, 0.2);
-    }
-
-    .swagger-ui .model-title {
-      color: #E6007A;
-      font-weight: 700;
-    }
-
-    /* Parameters table */
-    .swagger-ui .parameters-col_description input[type=text],
-    .swagger-ui .parameters-col_description select,
-    .swagger-ui .parameters-col_description textarea {
-      border: 2px solid #E6007A;
-      border-radius: 6px;
-      padding: 8px;
-    }
-
-    .swagger-ui .parameters-col_description input[type=text]:focus,
-    .swagger-ui .parameters-col_description textarea:focus {
-      border-color: #552BBF;
-      outline: none;
-      box-shadow: 0 0 0 3px rgba(230, 0, 122, 0.1);
-    }
-
-    /* Scrollbar styling */
-    .swagger-ui ::-webkit-scrollbar {
-      width: 10px;
-      height: 10px;
-    }
-
-    .swagger-ui ::-webkit-scrollbar-track {
-      background: rgba(230, 0, 122, 0.1);
-      border-radius: 5px;
-    }
-
-    .swagger-ui ::-webkit-scrollbar-thumb {
-      background: #E6007A;
-      border-radius: 5px;
-    }
-
-    .swagger-ui ::-webkit-scrollbar-thumb:hover {
-      background: #552BBF;
-    }
-
-    /* Polkadot watermark + badge */
-    .swagger-ui .information-container::before {
-      content: "⚡";
-      font-size: 120px;
-      position: absolute;
-      right: 20px;
-      top: 20px;
-      opacity: 0.1;
-      z-index: 0;
-    }
-
-    .swagger-ui .info .title::after {
-      content: "Polkadot Cloud Hackathon 2025";
-      display: block;
-      font-size: 0.3em;
-      margin-top: 15px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      padding: 10px 20px;
-      border-radius: 25px;
-      font-weight: 600;
-      width: fit-content;
-    }
-
-    /* Links & tables */
-    .swagger-ui a {
-      color: #E6007A;
-      font-weight: 600;
-    }
-
-    .swagger-ui a:hover {
-      color: #552BBF;
-      text-decoration: underline;
-    }
-
-    .swagger-ui table thead tr {
-      background: rgba(230, 0, 122, 0.1);
-      border-bottom: 2px solid #E6007A;
-    }
-
-    .swagger-ui table thead th {
-      color: #E6007A;
-      font-weight: 700;
-    }
-
-    /* Buttons */
-    .swagger-ui .download-contents,
-    .swagger-ui .copy-to-clipboard:hover {
-      background: #E6007A;
-      color: white;
-    }
-
-    .swagger-ui .download-contents:hover {
-      background: #552BBF;
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .swagger-ui .info .title {
-        font-size: 2em;
-      }
-      .swagger-ui .opblock-tag-section h3 {
-        font-size: 1.4em;
-      }
-    }
+    .swagger-ui .opblock.opblock-post { border-color: #E6007A; background: rgba(230, 0, 122, 0.05); }
+    .swagger-ui .opblock.opblock-get { border-color: #552BBF; background: rgba(85, 43, 191, 0.05); }
+    .swagger-ui .btn.execute { background: #E6007A; color: white; }
+    .swagger-ui .btn.execute:hover { background: #552BBF; }
   `,
-  customSiteTitle: "Nani API Docs - Real-Time Polkadot Event Notifications",
+  customSiteTitle: "Nani API Docs - Real-Time Blockchain Monitoring",
   swaggerOptions: {
     persistAuthorization: true,
     displayRequestDuration: true,
     filter: true,
     tryItOutEnabled: true,
-    defaultModelsExpandDepth: 3,
-    defaultModelExpandDepth: 3,
-    displayOperationId: false,
     docExpansion: 'list',
     deepLinking: true,
-    showExtensions: true,
-    showCommonExtensions: true,
-    syntaxHighlight: { activate: true, theme: 'monokai' },
-    requestSnippetsEnabled: true,
-    requestSnippets: {
-      generators: {
-        curl_bash: { title: "cURL (bash)", syntax: "bash" },
-        curl_powershell: { title: "cURL (PowerShell)", syntax: "powershell" },
-        curl_cmd: { title: "cURL (CMD)", syntax: "bash" }
-      },
-      defaultExpanded: true
-    },
-    validatorUrl: null,
   }
 };
 
-// ——————————————————————————————————————
-// Swagger UI — Robust async loading with graceful degradation
-// ——————————————————————————————————————
 (async () => {
   const swaggerDoc = await loadSwaggerDocument();
 
   if (swaggerDoc) {
-    // Interactive docs with full Polkadot Cloud branding
     app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc, swaggerOptions));
     app.get('/openapi.json', (_, res) => res.json(swaggerDoc));
     app.get('/openapi.yaml', (_, res) => res.sendFile(path.join(process.cwd(), 'swagger.yaml')));
     logger.info('Swagger UI mounted at /docs');
-    logger.info('OpenAPI JSON: /openapi.json');
   } else {
-    // Fallback when swagger.yaml is missing or invalid
     app.get('/docs', (_, res) => res.status(500).json({ error: 'API documentation unavailable' }));
-    app.get('/openapi.json', (_, res) => res.status(500).json({ error: 'OpenAPI spec failed to load' }));
-    logger.error('Swagger UI disabled — swagger.yaml not found or invalid');
+    logger.error('Swagger UI disabled — swagger.yaml not found');
   }
 })();
 
-// ——————————————————————————————————————
-// Static files + public pages (landing & pitch)
-// ——————————————————————————————————————
+// ————————————————————————————————
+// STATIC FILES
+// ————————————————————————————————
 app.use(express.static('public'));
 
-// Legacy fallback (kept for compatibility – primary route below is cleaner)
-app.get('/openapi.json', (_, res) => {
-  res.sendFile(path.join(process.cwd(), 'swagger.yaml'));
-});
-
-/**
- * Root route – serves the public landing page
- */
-app.get('/', (_, res) => {
+app.get('/console', (_, res) => {
   const indexPath = path.join(process.cwd(), 'public', 'index.html');
   if (require('fs').existsSync(indexPath)) {
     res.sendFile(indexPath);
@@ -607,21 +273,42 @@ app.get('/', (_, res) => {
   }
 });
 
-/**
- * Pitch deck route – dedicated page for pitch deck
- */
 app.get('/pitch', (_, res) => {
-  const indexPath = path.join(process.cwd(), 'public', 'pitch.html');
-  if (require('fs').existsSync(indexPath)) {
-    res.sendFile(indexPath);
+  const pitchPath = path.join(process.cwd(), 'public', 'pitch.html');
+  if (require('fs').existsSync(pitchPath)) {
+    res.sendFile(pitchPath);
   } else {
     res.status(404).send('Pitch page not found');
   }
 });
 
-// ——————————————————————————————————————
+// ————————————————————————————————
+// ROOT ROUTE
+// ————————————————————————————————
+app.get('/', (_, res) => {
+  res.json({
+    name: 'Nani - Real-Time Blockchain Monitoring',
+    version: '1.0.0',
+    status: 'operational',
+    endpoints: {
+      docs: '/docs',
+      health: '/health',
+      auth: '/auth',
+      trial: '/api/trial',
+      analytics: '/api/analytics',
+      alerts: '/api/alerts',
+      x402: '/api/x402'
+    },
+    links: {
+      github: 'https://github.com/cenwadike/nani',
+      demo: 'https://nani-production-c105.up.railway.app'
+    }
+  });
+});
+
+// ————————————————————————————————
 // GLOBAL ERROR HANDLER (must be last)
-// ——————————————————————————————————————
+// ————————————————————————————————
 app.use(errorHandler);
 
 export default app;

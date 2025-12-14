@@ -69,13 +69,10 @@ const str = (val: string | undefined, def: string): string =>
   val && val.trim() ? val.trim() : def;
 
 // ——————————————————————————————————————
-// CHAINS CONFIGURATION — Enhanced with adapter types
+// CHAINS CONFIGURATION
 // ——————————————————————————————————————
 let CHAINS: ChainAdapterConfig[] = [];
 
-/**
- * Load chains from chains.json with adapter type mapping
- */
 try {
   const chainsPath = path.join(process.cwd(), 'chains.json');
   if (fs.existsSync(chainsPath)) {
@@ -97,9 +94,6 @@ try {
   logger.warn(`Failed to load chains.json: ${(err as Error).message}`);
 }
 
-/**
- * Detect adapter type from chain name or RPC URLs
- */
 function detectAdapterType(
   name: string,
   rpcUrls: string[]
@@ -107,7 +101,6 @@ function detectAdapterType(
   const lowerName = name.toLowerCase();
   const firstUrl = rpcUrls[0]?.toLowerCase() || '';
 
-  // Substrate chains
   if (
     lowerName.includes('polkadot') ||
     lowerName.includes('kusama') ||
@@ -120,7 +113,6 @@ function detectAdapterType(
     return 'substrate';
   }
 
-  // evm chains
   if (
     lowerName.includes('evm') ||
     lowerName.includes('eth') ||
@@ -134,7 +126,6 @@ function detectAdapterType(
     return 'evm';
   }
 
-  // Cosmos chains
   if (
     lowerName.includes('cosmos') ||
     lowerName.includes('osmosis') ||
@@ -144,7 +135,6 @@ function detectAdapterType(
     return 'cosmos';
   }
 
-  // Solana chains
   if (lowerName.includes('solana') || firstUrl.includes('solana')) {
     return 'solana';
   }
@@ -216,18 +206,48 @@ const config = {
     str(process.env.ENCRYPTION_KEY, 'default-32-char-key-change-me!'),
     'utf8'
   ).toString('base64'),
+  
+  // ——————————————————————————————————————
+  // EVENT QUEUE CONFIGURATION (NEW)
+  // ——————————————————————————————————————
+  queue: {
+    // Maximum number of events in queue before dropping new ones
+    // Higher = more memory, lower = more drops under load
+    maxSize: int(process.env.QUEUE_MAX_SIZE, 10000),
+    
+    // Number of events to process in each batch
+    // Higher = faster processing but more memory pressure
+    // Lower = slower but more stable
+    batchSize: int(process.env.QUEUE_BATCH_SIZE, 100),
+    
+    // Maximum retry attempts for failed events
+    maxRetries: int(process.env.QUEUE_MAX_RETRIES, 3),
+    
+    // Time window for deduplication (milliseconds)
+    // Events with same hash within this window are dropped
+    deduplicationWindow: int(process.env.QUEUE_DEDUP_WINDOW, 60000), // 1 minute
+    
+    // Delay between batch processing (milliseconds)
+    // Higher = less CPU usage but slower processing
+    // Lower = faster but more CPU intensive
+    processingDelay: int(process.env.QUEUE_PROCESSING_DELAY, 100),
+  },
+  
   twilio: {
     sid: str(process.env.TWILIO_SID, ''),
     token: str(process.env.TWILIO_TOKEN, ''),
     from: str(process.env.TWILIO_FROM, ''),
   },
+  
   discord: {
     webhook: str(process.env.DISCORD_WEBHOOK, ''),
   },
+  
   rateLimit: {
     windowMs: 60 * 1000,
     max: 10,
   },
+  
   smtp: {
     host: str(process.env.SMTP_HOST, 'localhost'),
     port: int(process.env.SMTP_PORT, 587),
@@ -259,6 +279,7 @@ logger.info(`Config loaded successfully`);
 logger.info(`→ ${CHAINS.length} chain(s) active`);
 logger.info(`→ Adapter types: ${[...new Set(CHAINS.map(c => c.adapterType))].join(', ')}`);
 logger.info(`→ HTTP server will listen on port ${config.port}`);
+logger.info(`→ Queue config: maxSize=${config.queue.maxSize}, batchSize=${config.queue.batchSize}, delay=${config.queue.processingDelay}ms`);
 
 export { CHAINS };
 export default config;
