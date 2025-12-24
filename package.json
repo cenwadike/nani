@@ -44,6 +44,7 @@
     "stripe": "^20.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "thirdweb": "^5.116.1",
     "twilio": "^4.19.0",
     "uuid": "^13.0.0",
     "winston": "^3.11.0",

@@ -7,7 +7,7 @@ package-lock.json
 .DS_Store
 .vscode/
 .github/
-
+TODO.md
 # Logs
 logs/
 *.log
