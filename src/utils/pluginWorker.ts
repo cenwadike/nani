@@ -75,9 +75,9 @@ async function processPluginTask(task: {
   ensurePluginsLoaded();
 
   const { event, config, chainId, tokenSymbol } = task;
-  const { address, plugins, filters = [] } = config; // ← Extract filters
+  const { monitoringMode = 'personal', addresses = [] as string[], plugins, filters = [] } = config;
 
-  if (!address || !plugins || !plugins.activities?.length) {
+  if (!addresses || !plugins || !plugins.activities?.length) {
     logger.warn(`[WORKER ${process.pid}] Missing config - skipping`);
     return [];
   }
@@ -88,12 +88,11 @@ async function processPluginTask(task: {
   const filterConfig: FilterConfig[] = filters.filter((f: any) => f.enabled);
 
   if (filterConfig.length > 0) {
-    const passed = await applyFilters(event, chainId, address, filterConfig);
+    const passed = await applyFilters(event, chainId, config);
     if (!passed) {
-      logger.info(`[WORKER ${process.pid}] Event rejected by filters`);
-      return []; // Early exit – no need to process plugins
-    }
-    logger.info(`[WORKER ${process.pid}] Event passed safe filters (${filterConfig.length} applied)`);
+      logger.info(`[WORKER ${process.pid}] Event rejected (mode: ${monitoringMode}, addresses: ${addresses.length})`);
+      return [];
+    }  
   }
 
   const notificationResults: Promise<any>[] = [];
@@ -114,12 +113,17 @@ async function processPluginTask(task: {
 
       // Removed: .filter() call – now handled by filterEngine
 
-      // 2. Log
-      const logEntry = await activityPlugin.log(event, address, chainId, tokenSymbol);
-      logger.info(`[WORKER ${process.pid}] Logged: ${JSON.stringify(logEntry)}`);
+      // 2. Log for each address in personal mode, once in global mode
+      const logEntries = await activityPlugin.log(
+        event,
+        monitoringMode === 'personal' ? addresses : undefined,
+        chainId,
+        tokenSymbol
+      );
+      logger.info(`[WORKER ${process.pid}] Logged: ${JSON.stringify(logEntries)}`);
 
       // 3. Format message
-      const message = await activityPlugin.formatMessage(logEntry, tokenSymbol);
+      const message = await activityPlugin.formatMessage(logEntries, tokenSymbol);
       logger.info(`[WORKER ${process.pid}] Formatted: ${message}`);
 
       // 4. Notify

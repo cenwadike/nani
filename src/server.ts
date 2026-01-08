@@ -65,6 +65,7 @@ import { startValidatorCacheCleanup } from './plugins/activities/staking';
 
 // Import scheduled tasks
 import './jobs/scheduledTasks';
+import { tenantCache } from './utils/tenantCache';
 
 const numCores = os.cpus().length;
 const workerFile = path.join(
@@ -226,6 +227,8 @@ async function processQueuedEvent(item: QueuedEvent): Promise<void> {
 // BLOCKCHAIN MONITORING
 // ————————————————————————————————
 export async function startMonitoring() {
+  await tenantCache.initialize();
+  
   if (monitoringStarted) {
     logger.info('Monitoring already active');
     return;
@@ -270,38 +273,29 @@ export async function startMonitoring() {
         })
       );
 
-      const validTenants = tenantConfigs.filter(Boolean) as Array<{
-        tenantId: string;
-        config: any;
-      }>;
+      const validTenants = tenantCache.getAllForChain(chainName);
 
       if (validTenants.length === 0) {
-        logger.info(`No config for any tenant on ${chainName}`);
+        logger.info(`No cached config for any tenant on ${chainName}`);
         return;
       }
 
       logger.event(`Queueing event for ${validTenants.length} tenant(s) on ${chainName}`);
 
-      const chainConfig = CHAINS.find(c => c.name === chainName);
-      if (!chainConfig) {
-        logger.warn(`Chain config not found for ${chainName}`);
-        return;
-      }
-
-      for (const { tenantId, config } of validTenants) {
-        const success = eventQueue.enqueue(
-          chainName,
-          serializedEvent,
-          tenantId,
-          config,
-          chainName,
-          chainConfig.tokenSymbol
-        );
-
-        if (!success) {
-          logger.error(`Failed to enqueue event for tenant ${tenantId}`);
-        }
-      }
+      await Promise.all(
+        validTenants.map(({ tenantId, config }) => {
+          const chainConfig = CHAINS.find(c => c.name === chainName)!;
+          const success = eventQueue.enqueue(
+            chainName,
+            serializedEvent,
+            tenantId,
+            config,
+            chainName,
+            chainConfig.tokenSymbol
+          );
+          if (!success) logger.error(`Failed to enqueue for tenant ${tenantId}`);
+        })
+      );
 
       (serializedEvent as any) = null;
       (tenantConfigs as any) = null;

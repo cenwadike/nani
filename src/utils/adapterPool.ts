@@ -9,7 +9,6 @@
  *              Fully async/await throughout - no blocking operations.
  */
 
-import os from 'os';
 import logger from './logger';
 import { getAdapterForChain } from './adapterRegistry';
 import { ChainAdapter, ChainAdapterConfig, ChainEvent } from '../types/adapterTypes';
@@ -17,205 +16,228 @@ import { ChainAdapter, ChainAdapterConfig, ChainEvent } from '../types/adapterTy
 interface AdapterPoolEntry {
   adapter: ChainAdapter;
   chainConfig: ChainAdapterConfig;
+  eventCallback: (chainName: string, event: ChainEvent) => Promise<void>;
   healthy: boolean;
   lastHealthCheck: Date;
   subscriptionActive: boolean;
   reconnectAttempts: number;
-  unsubscribeFn?: () => void;
+  maxReconnectAttempts: number;
+  currentUnsubscribe?: () => void;
 }
 
 class AdapterPool {
   private pool = new Map<string, AdapterPoolEntry>();
   private healthCheckInterval: NodeJS.Timeout | null = null;
-  private readonly HEALTH_CHECK_INTERVAL = 30_000; // 30 seconds
-  private readonly MAX_RECONNECT_ATTEMPTS = 10;
+  private readonly HEALTH_CHECK_INTERVAL = 30_000; // 30s
+  private readonly BASE_RECONNECT_DELAY = 5000; // 5s base
 
   /**
-   * Initialize adapter for a chain
+   * Initialize or re-initialize adapter for a chain
    */
-  async initializeAdapter(
+  private async setupAdapter(
     chainConfig: ChainAdapterConfig,
     eventCallback: (chainName: string, event: ChainEvent) => Promise<void>
   ): Promise<void> {
     const chainName = chainConfig.name;
+    let entry = this.pool.get(chainName);
 
-    if (this.pool.has(chainName)) {
-      logger.warn(`Adapter for ${chainName} already initialized`);
-      return;
+    // Always disconnect first if exists
+    if (entry) {
+      await this.cleanupAdapter(chainName);
     }
 
     try {
-      logger.info(`Initializing adapter for ${chainName}...`);
+      logger.info(`Setting up adapter for ${chainName}...`);
 
-      // Get appropriate adapter
       const adapter = getAdapterForChain(chainName);
       if (!adapter) {
-        throw new Error(`No adapter found for chain: ${chainName}`);
+        throw new Error(`No adapter registered for chain: ${chainName}`);
       }
 
-      // Initialize adapter configuration
+      // Initialize adapter
       await adapter.init({
         name: chainConfig.name,
         adapterType: chainConfig.adapterType,
         endpoints: chainConfig.endpoints,
         tokenSymbol: chainConfig.tokenSymbol,
-        reconnectAttempts: this.MAX_RECONNECT_ATTEMPTS,
-        reconnectDelay: 5000,
+        reconnectAttempts: 0, // We manage reconnects at pool level
+        reconnectDelay: 0,
         timeout: 30000,
         customSettings: chainConfig.customSettings || {},
         assignedWorkerId: chainConfig.assignedWorkerId,
       });
 
-      // Connect to chain
+      // Connect
       await adapter.connect(chainConfig.endpoints);
 
-      // Subscribe to events
+      // Subscribe
       const unsubscribe = await adapter.subscribeToEvents(
         async (event: ChainEvent) => {
-          await eventCallback(chainName, event);
+          try {
+            await eventCallback(chainName, event);
+          } catch (err: any) {
+            logger.error(`Error in event callback for ${chainName}: ${err.message}`);
+          }
         }
       );
 
-      // Add to pool
+      // Store fresh entry
       this.pool.set(chainName, {
         adapter,
         chainConfig,
+        eventCallback,
         healthy: true,
         lastHealthCheck: new Date(),
         subscriptionActive: true,
         reconnectAttempts: 0,
-        unsubscribeFn: unsubscribe,
+        maxReconnectAttempts: 15,
+        currentUnsubscribe: unsubscribe,
       });
 
-      logger.info(`✓ Adapter for ${chainName} initialized and subscribed`);
+      logger.info(`✓ Adapter for ${chainName} fully connected and subscribed`);
 
     } catch (err: any) {
-      logger.error(`Failed to initialize adapter for ${chainName}: ${err.message}`);
+      logger.error(`Failed to setup adapter for ${chainName}: ${err.message}`);
       throw err;
     }
   }
 
   /**
-   * Initialize adapters for all chains
+   * Initialize all adapters
    */
   async initializeAll(
     chains: ChainAdapterConfig[],
     eventCallback: (chainName: string, event: ChainEvent) => Promise<void>
   ): Promise<void> {
-    logger.info(`Initializing adapters for ${chains.length} chain(s)...`);
+    logger.info(`Initializing ${chains.length} chain adapter(s)...`);
 
     const results = await Promise.allSettled(
-      chains.map(chain => this.initializeAdapter(chain, eventCallback))
+      chains.map(chain => this.setupAdapter(chain, eventCallback))
     );
 
     const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
 
-    logger.info(`Adapter initialization complete: ${successful} successful, ${failed} failed`);
+    logger.info(`Adapter init complete: ${successful} OK, ${failed.length} failed`);
+
+    failed.forEach((result, i) => {
+      logger.error(`Failed chain: ${chains[i].name} → ${result.reason}`);
+    });
 
     if (successful === 0) {
-      throw new Error('Failed to initialize any adapters');
+      throw new Error('No adapters initialized successfully');
     }
 
-    // Start health monitoring
     this.startHealthMonitoring();
   }
 
   /**
-   * Get adapter for a specific chain
+   * Perform health checks and auto-reconnect if needed
    */
-  getAdapter(chainName: string): ChainAdapter | undefined {
+  private async performHealthChecks(): Promise<void> {
+    const checks = Array.from(this.pool.entries()).map(async ([chainName, entry]) => {
+      let healthy = false;
+      try {
+        healthy = await entry.adapter.healthCheck();
+      } catch (err: any) {
+        logger.error(`Health check threw for ${chainName}: ${err.message}`);
+        healthy = false;
+      }
+
+      entry.healthy = healthy;
+      entry.lastHealthCheck = new Date();
+
+      if (!healthy) {
+        logger.warn(`Adapter ${chainName} unhealthy → initiating reconnect (attempt ${entry.reconnectAttempts + 1})`);
+        await this.reconnectAdapter(chainName);
+      } else if (entry.reconnectAttempts > 0) {
+        entry.reconnectAttempts = 0; // Reset on success
+      }
+    });
+
+    await Promise.all(checks);
+  }
+
+  /**
+   * Reconnect a single adapter with exponential backoff
+   */
+  private async reconnectAdapter(chainName: string): Promise<void> {
     const entry = this.pool.get(chainName);
-    return entry?.adapter;
+    if (!entry) return;
+
+    if (entry.reconnectAttempts >= entry.maxReconnectAttempts) {
+      logger.error(`Max reconnect attempts (${entry.maxReconnectAttempts}) reached for ${chainName}. Giving up.`);
+      entry.healthy = false;
+      return;
+    }
+
+    entry.reconnectAttempts++;
+
+    const delay = this.BASE_RECONNECT_DELAY * Math.pow(2, entry.reconnectAttempts - 1);
+    logger.info(`Reconnecting ${chainName} in ${delay / 1000}s (attempt ${entry.reconnectAttempts})`);
+
+    setTimeout(async () => {
+      try {
+        await this.setupAdapter(entry.chainConfig, entry.eventCallback);
+        logger.info(`✓ Successfully reconnected and resubscribed ${chainName}`);
+      } catch (err: any) {
+        logger.error(`Reconnect failed for ${chainName}: ${err.message}`);
+        // Next health check will retry
+      }
+    }, delay);
+  }
+
+  /**
+   * Clean up adapter resources
+   */
+  private async cleanupAdapter(chainName: string): Promise<void> {
+    const entry = this.pool.get(chainName);
+    if (!entry) return;
+
+    try {
+      if (entry.currentUnsubscribe) {
+        entry.currentUnsubscribe();
+      }
+      await entry.adapter.disconnect();
+      logger.info(`Cleaned up adapter for ${chainName}`);
+    } catch (err: any) {
+      logger.warn(`Error during cleanup of ${chainName}: ${err.message}`);
+    }
   }
 
   /**
    * Check if adapter is healthy
    */
-  isHealthy(chainName: string): boolean {
+  async isHealthy(chainName: string): Promise<boolean> {
     const entry = this.pool.get(chainName);
-    return entry?.healthy ?? false;
-  }
+    if (!entry) return false;
+    
+    const isHealthy = entry?.healthy ?? false;
 
+    if (!isHealthy) {
+      logger.warn(`Adapter for ${chainName} is currently unhealthy. Restarting adapter`);
+      logger.warn(`Adapter ${chainName} unhealthy → initiating reconnect (attempt ${entry.reconnectAttempts + 1})`);
+      await this.reconnectAdapter(chainName);
+    } else if (entry.reconnectAttempts > 0) {
+      entry.reconnectAttempts = 0; // Reset on success
+    }
+
+    return isHealthy;
+  }
+  
   /**
-   * Start periodic health checks for all adapters
+   * Start health monitoring
    */
   private startHealthMonitoring(): void {
     if (this.healthCheckInterval) return;
 
-    this.healthCheckInterval = setInterval(async () => {
-      await this.performHealthChecks();
+    this.healthCheckInterval = setInterval(() => {
+      this.performHealthChecks().catch(err => {
+        logger.error(`Health check cycle error: ${err.message}`);
+      });
     }, this.HEALTH_CHECK_INTERVAL);
 
-    logger.info('Health monitoring started for all adapters');
-  }
-
-  /**
-   * Perform health checks on all adapters
-   */
-  private async performHealthChecks(): Promise<void> {
-    const chains = Array.from(this.pool.keys());
-    
-    await Promise.all(
-      chains.map(async (chainName) => {
-        const entry = this.pool.get(chainName);
-        if (!entry) return;
-
-        try {
-          const healthy = await entry.adapter.healthCheck();
-          entry.healthy = healthy;
-          entry.lastHealthCheck = new Date();
-
-          if (!healthy) {
-            logger.warn(`Health check failed for ${chainName}`);
-            await this.handleUnhealthyAdapter(chainName, entry);
-          }
-        } catch (err: any) {
-          logger.error(`Health check error for ${chainName}: ${err.message}`);
-          entry.healthy = false;
-          await this.handleUnhealthyAdapter(chainName, entry);
-        }
-      })
-    );
-  }
-
-  /**
-   * Handle unhealthy adapter - attempt reconnection
-   */
-  private async handleUnhealthyAdapter(
-    chainName: string,
-    entry: AdapterPoolEntry
-  ): Promise<void> {
-    if (entry.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-      logger.error(
-        `Max reconnection attempts reached for ${chainName}. Manual intervention required.`
-      );
-      return;
-    }
-
-    entry.reconnectAttempts++;
-    logger.info(`Attempting to reconnect ${chainName} (attempt ${entry.reconnectAttempts})`);
-
-    try {
-      // Disconnect existing adapter
-      await entry.adapter.disconnect();
-
-      // Reconnect
-      await entry.adapter.connect(entry.chainConfig.endpoints);
-
-      // Resubscribe if subscription was active
-      if (entry.subscriptionActive && entry.unsubscribeFn) {
-        // Note: subscribeToEvents would need to be called again with callback
-        logger.info(`Resubscription needed for ${chainName} - requires event callback`);
-      }
-
-      entry.healthy = true;
-      entry.reconnectAttempts = 0;
-      logger.info(`✓ Successfully reconnected ${chainName}`);
-
-    } catch (err: any) {
-      logger.error(`Reconnection failed for ${chainName}: ${err.message}`);
-    }
+    logger.info('Adapter health monitoring started');
   }
 
   /**
@@ -228,14 +250,14 @@ class AdapterPool {
     chains: Array<{
       name: string;
       healthy: boolean;
-      lastCheck: Date;
+      lastCheck: string;
       reconnectAttempts: number;
     }>;
   } {
     const chains = Array.from(this.pool.entries()).map(([name, entry]) => ({
       name,
       healthy: entry.healthy,
-      lastCheck: entry.lastHealthCheck,
+      lastCheck: entry.lastHealthCheck.toISOString(),
       reconnectAttempts: entry.reconnectAttempts,
     }));
 
@@ -248,65 +270,23 @@ class AdapterPool {
   }
 
   /**
-   * Gracefully shutdown all adapters
+   * Graceful shutdown
    */
   async shutdown(): Promise<void> {
     logger.info('Shutting down adapter pool...');
 
-    // Stop health monitoring
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
 
-    // Disconnect all adapters
-    const chains = Array.from(this.pool.keys());
-    await Promise.allSettled(
-      chains.map(async (chainName) => {
-        const entry = this.pool.get(chainName);
-        if (!entry) return;
-
-        try {
-          // Unsubscribe from events
-          if (entry.unsubscribeFn) {
-            entry.unsubscribeFn();
-          }
-
-          // Disconnect adapter
-          await entry.adapter.disconnect();
-          logger.info(`Disconnected adapter for ${chainName}`);
-        } catch (err: any) {
-          logger.warn(`Error disconnecting ${chainName}: ${err.message}`);
-        }
-      })
-    );
+    const cleanups = Array.from(this.pool.keys()).map(chain => this.cleanupAdapter(chain));
+    await Promise.allSettled(cleanups);
 
     this.pool.clear();
-    logger.info('Adapter pool shutdown complete');
-  }
-
-  /**
-   * Auto-scale based on environment
-   */
-  static getOptimalPoolSize(): number {
-    const cpus = os.cpus().length;
-    const isPaaS = !!(
-      process.env.RAILWAY_ENVIRONMENT ||
-      process.env.RENDER_INSTANCE_ID ||
-      process.env.FLY_APP_NAME
-    );
-
-    if (isPaaS) {
-      // Conservative scaling for PaaS
-      return Math.max(2, Math.floor(cpus * 0.75));
-    }
-
-    // Full scaling for dedicated infrastructure
-    return cpus;
+    logger.info('Adapter pool fully shut down');
   }
 }
 
-// Singleton instance
 export const adapterPool = new AdapterPool();
-
 export default adapterPool;

@@ -3,8 +3,15 @@ import { checkAnalyticsAccess } from '../billing/analytics';
 import storage from '../utils/storage';
 import { getX402PaymentInfo, trackX402Usage, verifyX402Payment } from '../billing/x402';
 import logger from '../utils/logger';
+import { InferenceClient } from '@huggingface/inference';
+import config from '../config';
+import { DirectedGraph } from 'graphology';
+import { connectedComponents } from 'graphology-components';
 
 const router = Router();
+
+// Singleton client
+const hf = new InferenceClient(config.hfToken || process.env.HF_TOKEN);
 
 // ————————————————————————————————
 // GET /stats/basic - Basic Analytics (Free)
@@ -42,12 +49,12 @@ router.get('/basic', async (req: Request, res: Response) => {
         new Date(l.timestamp).getTime() > last7d
       ).length,
       byChain: logs.reduce((acc: any, log: any) => {
-        const chain = log.chain || 'unknown';
+        const chain = log.chainId || 'unknown';
         acc[chain] = (acc[chain] || 0) + 1;
         return acc;
       }, {}),
       byType: logs.reduce((acc: any, log: any) => {
-        const type = log.type || 'unknown';
+        const type = log.event || 'unknown';
         acc[type] = (acc[type] || 0) + 1;
         return acc;
       }, {})
@@ -87,7 +94,7 @@ router.get('/advanced', async (req: Request, res: Response) => {
 
     const logs = await storage.loadLogs(tenantId);
     
-    // Advanced computations
+    // Advanced computations with blockchain focus
     const stats = {
       totalEvents: logs.length,
       trends: calculateTrends(logs),
@@ -95,7 +102,9 @@ router.get('/advanced', async (req: Request, res: Response) => {
       predictions: predictNextWeek(logs),
       anomalies: detectAnomalies(logs),
       topChains: getTopChains(logs, 5),
-      peakTimes: findPeakTimes(logs)
+      peakTimes: findPeakTimes(logs),
+      behaviorPatterns: detectBehaviorPatterns(logs),
+      graphStats: analyzeTransactionGraph(logs)
     };
 
     res.json({
@@ -166,7 +175,7 @@ router.post('/ai', async (req: Request, res: Response) => {
       );
     }
 
-    // Process AI query
+    // Process AI query with advanced blockchain analysis
     const logs = await storage.loadLogs(tenantId);
     const aiResponse = await processAIQuery(query, logs);
 
@@ -287,7 +296,7 @@ function detectAnomalies(logs: any[]) {
 function getTopChains(logs: any[], limit: number = 5) {
   const chainCounts: { [chain: string]: number } = {};
   logs.forEach((log) => {
-    const chain = log.chain || 'unknown';
+    const chain = log.chainId || 'unknown';
     chainCounts[chain] = (chainCounts[chain] || 0) + 1;
   });
 
@@ -320,20 +329,252 @@ function findPeakTimes(logs: any[]) {
   };
 }
 
-// Mock AI processing (in real implementation, call an LLM API)
-async function processAIQuery(query: string, logs: any[]) {
-  // This is a placeholder – replace with actual LLM integration
-  const total = logs.length;
-  const topChain = Object.keys(getTopChains(logs, 1))[0] || 'unknown';
-  const trend = calculateTrends(logs);
+function detectBehaviorPatterns(logs: any[]) {
+  // Simple pattern detection: frequent senders/receivers, repeated events
+  const senderFreq = logs.reduce((acc: any, log: any) => {
+    if (log.data?.from) {
+      acc[log.data.from] = (acc[log.data.from] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const receiverFreq = logs.reduce((acc: any, log: any) => {
+    if (log.data?.to) {
+      acc[log.data.to] = (acc[log.data.to] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const patterns = {
+    topSenders: Object.entries(senderFreq).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 5),
+    topReceivers: Object.entries(receiverFreq).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 5),
+    repeatedEvents: logs.reduce((acc: any, log: any) => {
+      const key = `${log.event}-${log.data?.from || ''}-${log.data?.to || ''}`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {})
+  };
+
+  return patterns;
+}
+
+/**
+ * Analyzes transaction logs to build a directed graph of fund flows
+ * Returns rich network metrics for blockchain intelligence
+ */
+function analyzeTransactionGraph(logs: any[]) {
+  const graph = new DirectedGraph();
+
+  let validTxCount = 0;
+
+  for (const log of logs) {
+    const { from, to, value, txHash } = log.data || {};
+    const { chainId, timestamp } = log;
+
+    // Only process valid transfers
+    if (!from || !to || from === to) continue;
+
+    // Add nodes with attributes
+    if (!graph.hasNode(from)) {
+      graph.addNode(from, {
+        type: 'address',
+        firstSeen: timestamp,
+        chain: chainId || 'unknown',
+        txCount: 0,
+        inflow: 0,
+        outflow: 0
+      });
+    }
+
+    if (!graph.hasNode(to)) {
+      graph.addNode(to, {
+        type: 'address',
+        firstSeen: timestamp,
+        chain: chainId || 'unknown',
+        txCount: 0,
+        inflow: 0,
+        outflow: 0
+      });
+    }
+
+    // Add directed edge (source → target = funds moving from → to)
+    graph.addDirectedEdgeWithKey?.(`${from}-${to}-${txHash || Date.now()}`, from, to, {
+      value: Number(value || 0),
+      txHash: txHash || null,
+      timestamp,
+      chain: chainId || 'unknown'
+    }) || graph.addDirectedEdge(from, to, {
+      value: Number(value || 0),
+      txHash: txHash || null,
+      timestamp,
+      chain: chainId || 'unknown'
+    });
+
+    // Update node counters
+    graph.updateNodeAttributes(from, attrs => ({
+      ...attrs,
+      txCount: (attrs.txCount || 0) + 1,
+      outflow: (attrs.outflow || 0) + Number(value || 0)
+    }));
+
+    graph.updateNodeAttributes(to, attrs => ({
+      ...attrs,
+      txCount: (attrs.txCount || 0) + 1,
+      inflow: (attrs.inflow || 0) + Number(value || 0)
+    }));
+
+    validTxCount++;
+  }
+
+  // Compute network metrics
+  const nodes = graph.order;
+  const edges = graph.directedSize;
+
+  const degrees = graph.nodes().map(node => ({
+    node,
+    inDegree: graph.inDegree(node),
+    outDegree: graph.outDegree(node),
+    degree: graph.degree(node)
+  }));
+
+  const avgInDegree = nodes > 0 
+    ? degrees.reduce((sum, d) => sum + d.inDegree, 0) / nodes 
+    : 0;
+  const avgOutDegree = nodes > 0 
+    ? degrees.reduce((sum, d) => sum + d.outDegree, 0) / nodes 
+    : 0;
+
+  // Find hubs (high degree nodes)
+  const topSenders = degrees
+    .sort((a, b) => b.outDegree - a.outDegree)
+    .slice(0, 10)
+    .map(d => ({
+      address: d.node,
+      outDegree: d.outDegree,
+      outflow: graph.getNodeAttribute(d.node, 'outflow') || 0
+    }));
+
+  const topReceivers = degrees
+    .sort((a, b) => b.inDegree - a.inDegree)
+    .slice(0, 10)
+    .map(d => ({
+      address: d.node,
+      inDegree: d.inDegree,
+      inflow: graph.getNodeAttribute(d.node, 'inflow') || 0
+    }));
 
   return {
-    summary: `Based on your ${total} logged events, the most active chain is ${topChain}.`,
-    answer: `AI response to "${query}": Activity shows an average of ${trend.averagePerDay || 0} events per day, with growth of ${trend.growth || 'N/A'}.`,
-    suggestions: [
-      "Consider monitoring peak hour (UTC): " + findPeakTimes(logs).peakHourUTC,
-      "Watch for anomalies: " + (detectAnomalies(logs).length > 0 ? 'Detected' : 'None')
-    ]
+    summary: {
+      nodes,
+      edges,
+      validTransactions: validTxCount,
+      density: nodes > 1 ? Number((edges / (nodes * (nodes - 1))).toFixed(6)) : 0,
+      averageInDegree: Number(avgInDegree.toFixed(2)),
+      averageOutDegree: Number(avgOutDegree.toFixed(2)),
+      connectedComponents: connectedComponents(graph).length
+    },
+    hubs: {
+      topSenders,
+      topReceivers
+    },
+    riskIndicators: {
+      highConcentration: topSenders[0]?.outDegree / edges > 0.3,
+      centralReceiver: topReceivers[0]?.inDegree / edges > 0.3,
+      potentialMixer: topSenders.some(s => s.outDegree > 50 && topReceivers.some(r => r.address === s.address))
+    }
+  };
+}
+
+async function traceAccount(logs: any[], address: string) {
+  const relatedTx = logs.filter(log => 
+    (log.data?.from === address || log.data?.to === address)
+  );
+
+  const inflows = relatedTx.filter(log => log.data?.to === address).reduce((sum, log) => sum + (log.data.value || 0), 0);
+  const outflows = relatedTx.filter(log => log.data?.from === address).reduce((sum, log) => sum + (log.data.value || 0), 0);
+
+  return {
+    transactions: relatedTx.length,
+    netFlow: inflows - outflows,
+    counterparts: [...new Set(relatedTx.map(log => log.data.from === address ? log.data.to : log.data.from).filter(Boolean))]
+  };
+}
+
+// AI processing using remote HF Inference API
+async function processAIQuery(query: string, logs: any[]) {
+  // Precompute deep blockchain insights
+  const summary = summarizeLogs(logs);
+  const patterns = detectBehaviorPatterns(logs);
+  const graphStats = analyzeTransactionGraph(logs);
+
+  // Optional: account tracing if query mentions an address
+  let traceInfo = {};
+  const addressMatch = query.match(/(0x[a-fA-F0-9]{40})/i);
+  if (addressMatch) {
+    traceInfo = traceAccount(logs, addressMatch[0]);
+  }
+
+  // Expert-level prompt for deep insights
+  const prompt = `You are a senior blockchain analytics and intelligence expert.
+User query: "${query}"
+
+Critical on-chain data summary:
+- Total events: ${summary.totalEvents}
+- Active chains: ${JSON.stringify(summary.topChains)}
+- Daily avg: ${summary.averagePerDay} events, growth: ${summary.growth}
+- Anomalies detected: ${summary.anomalies.length > 0 ? 'YES (' + summary.anomalies.length + ')' : 'None'}
+- Peak activity hour (UTC): ${summary.peakHourUTC}
+- Top sending addresses: ${JSON.stringify(patterns.topSenders.slice(0,5))}
+- Top receiving addresses: ${JSON.stringify(patterns.topReceivers.slice(0,5))}
+- Network graph: ${graphStats.summary.nodes} unique addresses, ${graphStats.summary.edges} transactions
+- Account trace (if requested): ${JSON.stringify(traceInfo)}
+
+Provide:
+• Deep behavioral analysis and patterns
+• Predictive trends for next 7–30 days
+• Risk flags (e.g., concentration, unusual flows)
+• Account tracing and fund flow insights
+• Actionable recommendations
+
+Be precise, evidence-based, and professional.`;
+
+  const response = await hf.textGeneration({
+    model: 'mistralai/Mistral-7B-Instruct-v0.3', // Excellent for analytics
+    inputs: prompt,
+    parameters: {
+      max_new_tokens: 1000,
+      temperature: 0.6,
+      top_p: 0.9,
+      return_full_text: false,
+    },
+  });
+
+  return {
+    aiInsights: response.generated_text.trim(),
+    model: 'Mistral-7B-Instruct-v0.3 (Hugging Face Inference API)',
+    usageNote: 'Free tier: ~1000 requests/day. Upgrade for more.',
+    metadata: {
+      predictions: predictNextWeek(logs),
+      graph: graphStats,
+      patterns
+    }
+  };
+}
+
+// Summarize for prompt
+function summarizeLogs(logs: any[]) {
+  const trends = calculateTrends(logs);
+  const anomalies = detectAnomalies(logs);
+  const topChains = getTopChains(logs);
+  const peakTimes = findPeakTimes(logs);
+
+  return {
+    totalEvents: logs.length,
+    topChains,
+    averagePerDay: trends.averagePerDay || 0,
+    growth: trends.growth || 'N/A',
+    anomalies,
+    peakHourUTC: peakTimes.peakHourUTC
   };
 }
 

@@ -1,721 +1,1328 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nani API - Real-Time Polkadot Event Monitoring and Notifications</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui.css">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-  <link rel="manifest" href="/site.webmanifest">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-      color: #fff;
-      overflow-x: hidden;
-    }
-
-    /* Hero Section */
-    .hero {
-      background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
-      padding: clamp(40px, 8vw, 80px) 20px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-      min-height: 500px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-      background-size: 50px 50px;
-      animation: grid-move 20s linear infinite;
-      opacity: 0.5;
-    }
-
-    @keyframes grid-move {
-      0% { transform: translate(0, 0); }
-      100% { transform: translate(50px, 50px); }
-    }
-
-    .hero-content {
-      position: relative;
-      z-index: 1;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 15px;
-    }
-
-    .hero h1 {
-      font-size: clamp(2.2em, 6vw, 3.5em);
-      margin-bottom: 20px;
-      font-weight: 800;
-      letter-spacing: -1px;
-      line-height: 1.1;
-    }
-
-    .hero .tagline {
-      font-size: clamp(1.1em, 3vw, 1.5em);
-      margin-bottom: 30px;
-      opacity: 0.95;
-      line-height: 1.4;
-    }
-
-    .hero .badges {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      margin-bottom: 30px;
-      flex-wrap: wrap;
-      padding: 0 10px;
-    }
-
-    .badge {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      padding: 8px 16px;
-      border-radius: 25px;
-      font-size: clamp(0.8em, 2vw, 0.9em);
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .cta-buttons {
-      display: flex;
-      gap: 15px;
-      justify-content: center;
-      flex-wrap: wrap;
-      padding: 0 10px;
-    }
-
-    .btn {
-      padding: clamp(12px, 3vw, 15px) clamp(25px, 5vw, 35px);
-      border-radius: 30px;
-      font-size: clamp(0.95em, 2.5vw, 1.1em);
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      text-decoration: none;
-      display: inline-block;
-    }
-
-    .btn-primary {
-      background: white;
-      color: #E6007A;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      color: white;
-      border: 2px solid white;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    /* Quick Start Section */
-    .quick-start {
-      background: #1a1a2e;
-      padding: clamp(40px, 8vw, 80px) 20px;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 15px;
-    }
-
-    .section-title {
-      font-size: clamp(2em, 5vw, 2.5em);
-      margin-bottom: 40px;
-      text-align: center;
-      color: #E6007A;
-      font-weight: 800;
-    }
-
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
-      gap: 25px;
-      margin-bottom: 50px;
-    }
-
-    .step {
-      background: rgba(255, 255, 255, 0.05);
-      padding: 25px;
-      border-radius: 15px;
-      border-left: 4px solid #E6007A;
-      transition: all 0.3s ease;
-    }
-
-    .step:hover {
-      transform: translateY(-5px);
-      background: rgba(230, 0, 122, 0.1);
-      box-shadow: 0 10px 30px rgba(230, 0, 122, 0.2);
-    }
-
-    .step-number {
-      font-size: clamp(2.5em, 6vw, 3em);
-      font-weight: 800;
-      color: #E6007A;
-      line-height: 1;
-      margin-bottom: 15px;
-    }
-
-    .step h3 {
-      font-size: clamp(1.2em, 3vw, 1.5em);
-      margin-bottom: 10px;
-    }
-
-    .step p {
-      font-size: clamp(0.9em, 2.5vw, 1em);
-      line-height: 1.5;
-    }
-
-    .step code {
-      display: block;
-      background: #0a0a0a;
-      padding: 10px;
-      border-radius: 5px;
-      margin-top: 15px;
-      font-size: clamp(0.75em, 2vw, 0.85em);
-      overflow-x: auto;
-      white-space: nowrap;
-    }
-
-    /* Features Section */
-    .features {
-      background: #0a0a0a;
-      padding: clamp(40px, 8vw, 80px) 20px;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-      gap: 25px;
-    }
-
-    .feature-card {
-      background: linear-gradient(135deg, rgba(230, 0, 122, 0.1) 0%, rgba(85, 43, 191, 0.1) 100%);
-      padding: 30px;
-      border-radius: 15px;
-      border: 1px solid rgba(230, 0, 122, 0.3);
-      transition: all 0.3s ease;
-    }
-
-    .feature-card:hover {
-      transform: translateY(-5px);
-      border-color: #E6007A;
-      box-shadow: 0 15px 40px rgba(230, 0, 122, 0.3);
-    }
-
-    .feature-icon {
-      font-size: clamp(2em, 5vw, 2.5em);
-      margin-bottom: 15px;
-      display: block;
-    }
-
-    .feature-card h3 {
-      font-size: clamp(1.1em, 3vw, 1.3em);
-      margin-bottom: 10px;
-      color: #E6007A;
-    }
-
-    .feature-card p {
-      font-size: clamp(0.9em, 2.5vw, 1em);
-      line-height: 1.6;
-      opacity: 0.9;
-    }
-
-    /* Marketplace Section */
-    .marketplace {
-      background: #1a1a2e;
-      padding: clamp(40px, 8vw, 80px) 20px;
-    }
-
-    .marketplace h1 {
-      font-size: clamp(2.2em, 6vw, 3em);
-      text-align: center;
-      margin-bottom: 50px;
-      background: linear-gradient(90deg, #E6007A, #552BBF);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-weight: 800;
-    }
-
-    .plugin-categories {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-      gap: 30px;
-      margin-bottom: 50px;
-    }
-
-    .category-card {
-      background: rgba(255, 255, 255, 0.03);
-      border-radius: 20px;
-      padding: 30px;
-      border: 2px solid rgba(230, 0, 122, 0.2);
-      transition: all 0.3s ease;
-    }
-
-    .category-card:hover {
-      border-color: #E6007A;
-      background: rgba(230, 0, 122, 0.05);
-      transform: translateY(-5px);
-      box-shadow: 0 15px 40px rgba(230, 0, 122, 0.2);
-    }
-
-    .category-header {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 2px solid rgba(230, 0, 122, 0.3);
-    }
-
-    .category-icon {
-      font-size: clamp(2em, 5vw, 2.5em);
-    }
-
-    .category-card h2 {
-      font-size: clamp(1.3em, 3.5vw, 1.6em);
-      color: #E6007A;
-      font-weight: 700;
-    }
-
-    .plugin-list {
-      list-style: none;
-    }
-
-    .plugin-item {
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: clamp(0.9em, 2.5vw, 1em);
-    }
-
-    .plugin-item:last-child {
-      border-bottom: none;
-    }
-
-    .plugin-item::before {
-      content: '→';
-      color: #E6007A;
-      font-weight: bold;
-      font-size: 1.2em;
-    }
-
-    .plugin-item:hover {
-      color: #E6007A;
-      padding-left: 5px;
-      transition: all 0.2s ease;
-    }
-
-    .community {
-      background: rgba(85, 43, 191, 0.1);
-      padding: 30px;
-      border-radius: 15px;
-      border: 1px solid rgba(85, 43, 191, 0.3);
-      margin-bottom: 40px;
-    }
-
-    .community h3 {
-      font-size: clamp(1.3em, 3.5vw, 1.6em);
-      color: #552BBF;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-
-    .contributor-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
-      gap: 15px;
-    }
-
-    .contributor {
-      background: rgba(255, 255, 255, 0.03);
-      padding: 15px;
-      border-radius: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: clamp(0.85em, 2.3vw, 0.95em);
-    }
-
-    .contributor a {
-      color: #E6007A;
-      text-decoration: none;
-      font-weight: 600;
-    }
-
-    .contributor a:hover {
-      text-decoration: underline;
-    }
-
-    .submit-btn {
-      display: block;
-      margin: 0 auto;
-      padding: clamp(14px, 3vw, 16px) clamp(30px, 5vw, 40px);
-      background: linear-gradient(135deg, #E6007A, #552BBF);
-      color: white;
-      font-weight: 700;
-      font-size: clamp(1em, 2.8vw, 1.2em);
-      border: none;
-      border-radius: 50px;
-      cursor: pointer;
-      box-shadow: 0 10px 30px rgba(230, 0, 122, 0.4);
-      transition: all 0.3s ease;
-      text-decoration: none;
-    }
-
-    .submit-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 15px 40px rgba(230, 0, 122, 0.5);
-    }
-
-    /* Swagger Container */
-    #swagger-ui {
-      padding: clamp(40px, 8vw, 60px) 20px 0;
-      background: #0a0a0a;
-    }
-
-    /* Hide Swagger topbar */
-    .swagger-ui .topbar {
-      display: none;
-    }
-
-    /* Custom Swagger styling */
-    .swagger-ui .info .title {
-      color: #E6007A;
-    }
-
-    .swagger-ui .opblock-tag {
-      border-bottom: 2px solid #E6007A;
-    }
-
-    .swagger-ui .opblock.opblock-post {
-      border-color: #E6007A;
-      background: rgba(230, 0, 122, 0.05);
-    }
-
-    .swagger-ui .opblock.opblock-get {
-      border-color: #552BBF;
-      background: rgba(85, 43, 191, 0.05);
-    }
-
-    .swagger-ui .btn.try-out__btn {
-      background: #E6007A;
-      color: white;
-      border: none;
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-      .hero {
-        min-height: 400px;
-      }
-
-      .steps {
-        gap: 20px;
-      }
-
-      .feature-card,
-      .category-card {
-        padding: 25px;
-      }
-
-      .plugin-categories {
-        gap: 25px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .hero {
-        min-height: 350px;
-        padding: 30px 15px;
-      }
-
-      .badge {
-        padding: 6px 12px;
-        font-size: 0.75em;
-      }
-
-      .step {
-        padding: 20px;
-      }
-
-      .feature-card,
-      .category-card {
-        padding: 20px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <!-- Hero Section -->
-  <div class="hero">
-    <div class="hero-content">
-      <h1>⚡ Nani API</h1>
-      <p class="tagline">Real-Time Polkadot Event Monitoring and Notifications in seconds</p>
-      
-      <div class="badges">
-        <span class="badge">Multi-Chain</span>
-        <span class="badge">Bank-Grade Encryption</span>
-        <span class="badge">Sub-Second Latency</span>
-        <span class="badge">100K+ Tenants</span>
-      </div>
-
-      <div class="cta-buttons">
-        <a href="#quick-start" class="btn btn-primary">Get Started</a>
-        <a href="https://github.com/cenwadike/nani" class="btn btn-secondary" target="_blank">View on GitHub</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Quick Start Section -->
-  <div class="quick-start" id="quick-start">
-    <div class="container">
-      <h2 class="section-title">Quick Start</h2>
-      
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <h3>Authenticate</h3>
-          <p>Get your JWT token with email or wallet signature</p>
-          <code>POST /auth</code>
-        </div>
-
-        <div class="step">
-          <div class="step-number">2</div>
-          <h3>Setup Monitoring</h3>
-          <p>Configure chains, addresses, and notification channels</p>
-          <code>POST /setup</code>
-        </div>
-
-        <div class="step">
-          <div class="step-number">3</div>
-          <h3>View Analytics</h3>
-          <p>Get real-time stats computed from encrypted logs</p>
-          <code>GET /stats</code>
-        </div>
-
-        <div class="step">
-          <div class="step-number">4</div>
-          <h3>Export Data</h3>
-          <p>Download logs as CSV/JSON for analysis</p>
-          <code>GET /export</code>
-        </div>
-      </div>
-
-      <div style="text-align: center; margin-top: 40px;">
-        <a href="docs/" class="btn btn-primary">Try Interactive API Docs</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Features Section -->
-  <div class="features">
-    <div class="container">
-      <h2 class="section-title">Why Nani?</h2>
-      
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">🔌</div>
-          <h3>Plugin Architecture</h3>
-          <p>Drop-in activity filters & notification channels. Only open-source event notification system with true extensibility.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🛡️</div>
-          <h3>PAPI-Powered Resilience</h3>
-          <p>Built on Polkadot Cloud with automatic RPC failover, graceful reconnection, and multi-endpoint support.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🌐</div>
-          <h3>Multi-Chain Native</h3>
-          <p>Monitor Westend, Asset Hub, Kusama, and more from a single API. Cross-chain aggregation out of the box.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🔒</div>
-          <h3>Security First</h3>
-          <p>AES-256 encryption, JWT auth, rate limiting. Your data is encrypted at rest and secured in transit.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">📊</div>
-          <h3>Zero-Cost Analytics</h3>
-          <p>Stats computed on-demand from logs. Real-Time database, zero overhead. PnL, volume, trends.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>Production Ready</h3>
-          <p>Supports 100K+ tenants per node. Parallel notifications, async processing, NodeJs clustering.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Marketplace Section -->
-  <div class="marketplace">
-    <div class="container">
-      <h1>Nani Plugin Marketplace</h1>
-      
-      <div class="plugin-categories">
-        <!-- Activities Category -->
-        <div class="category-card">
-          <div class="category-header">
-            <span class="category-icon">🎯</span>
-            <h2>Activities</h2>
-          </div>
-          <ul class="plugin-list">
-            <li class="plugin-item">Transfer Alerts</li>
-            <li class="plugin-item">Extrinsic Events</li>
-            <li class="plugin-item">OpenGov Events</li>
-            <li class="plugin-item">Staking Events</li>
-            <li class="plugin-item">XCM Tracking</li>
-            <li class="plugin-item">NFT Minting</li>
-          </ul>
-        </div>
-
-        <!-- Notifications Category -->
-        <div class="category-card">
-          <div class="category-header">
-            <span class="category-icon">🔔</span>
-            <h2>Notifications</h2>
-          </div>
-          <ul class="plugin-list">
-            <li class="plugin-item">Discord Webhooks</li>
-            <li class="plugin-item">Email Alerts</li>
-            <li class="plugin-item">SMS Notifications</li>
-            <li class="plugin-item">Telegram Bot</li>
-            <li class="plugin-item">Slack Integration</li>
-            <li class="plugin-item">Webhook Push</li>
-          </ul>
-        </div>
-
-        <!-- Analytics Category -->
-        <div class="category-card">
-          <div class="category-header">
-            <span class="category-icon">📈</span>
-            <h2>Analytics</h2>
-          </div>
-          <ul class="plugin-list">
-            <li class="plugin-item">Basic Metrics</li>
-            <li class="plugin-item">Yield Tracking</li>
-            <li class="plugin-item">PnL Calculator</li>
-            <li class="plugin-item">Volume Analysis</li>
-            <li class="plugin-item">Trend Reports</li>
-            <li class="plugin-item">Portfolio Insights</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- Community Contributions -->
-      <div class="community">
-        <h3>🌟 Community Contributions</h3>
-        <div class="contributor-list">
-          <div class="contributor">
-            <span>discord-webhook</span>
-            <a href="https://github.com/cenwadike" target="_blank">@cenwadike</a>
-          </div>
-          <div class="contributor">
-            <span>open-gov</span>
-            <a href="https://github.com/cenwadike" target="_blank">@cenwadike</a>
-          </div>
-          <div class="contributor">
-            <span>extrinsic</span>
-            <a href="https://github.com/cenwadike" target="_blank">@cenwadike</a>
-          </div>
-        </div>
-      </div>
-
-      <button class="submit-btn">
-        <a href='https://github.com/cenwadike/nani/issues/new' class="btn btn-secondary" target="_blank">Submit Your Plugin</a>
-      </button>
-    </div>
-  </div>
-
-  <!-- Swagger UI Container -->
-  <div id="swagger-ui"></div>
-
-  <!-- Swagger UI Scripts -->
-  <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-bundle.js"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5.10.0/swagger-ui-standalone-preset.js"></script>
-  <script>
-    window.onload = function() {
-      fetch('/openapi.json')
-        .then(response => response.json())
-        .then(spec => {
-          const ui = SwaggerUIBundle({
-            spec: spec,
-            dom_id: '#swagger-ui',
-            deepLinking: true,
-            presets: [
-              SwaggerUIBundle.presets.apis,
-              SwaggerUIStandalonePreset
-            ],
-            plugins: [
-              SwaggerUIBundle.plugins.DownloadUrl
-            ],
-            layout: "StandaloneLayout",
-            persistAuthorization: true,
-            tryItOutEnabled: true,
-            displayRequestDuration: true,
-            filter: true,
-            defaultModelsExpandDepth: 3,
-            defaultModelExpandDepth: 3,
-          });
-
-          window.ui = ui;
-
-          if (window.location.hash === '#docs' || window.location.hash === '#swagger-ui') {
-            setTimeout(() => {
-              document.querySelector('#swagger-ui').scrollIntoView({ behavior: 'smooth' });
-            }, 500);
-          }
-        });
-    };
-
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth' });
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nani Plus - Complete Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #E6007A; --secondary: #552BBF; --blue: #3b82f6;
+            --dark: #0f172a; --darker: #1e293b; --success: #10b981;
+            --warning: #f59e0b; --error: #ef4444;
         }
-      });
-    });
-  </script>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a; color: #e2e8f0; line-height: 1.6; min-height: 100vh;
+        }
+        body.logged-out { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
+        header {
+            background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+            padding: 1.5rem 2rem; position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        body.logged-out header { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
+        .header-content {
+            display: flex; align-items: center; justify-content: space-between;
+            max-width: 1400px; margin: 0 auto;
+        }
+        .logo { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-icon {
+            width: 36px; height: 36px; background: white; border-radius: 0.5rem;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #E6007A; font-size: 18px;
+        }
+        body.logged-out .logo-icon { color: #3b82f6; }
+        .logo-text { font-size: 1.5rem; font-weight: 800; color: white; }
+        .logo-plus {
+            background: white; color: #E6007A; padding: 4px 12px;
+            border-radius: 20px; font-size: 14px; font-weight: 700; margin-left: 8px;
+        }
+        body.logged-out .logo-plus { color: #3b82f6; }
+        .header-actions { display: flex; gap: 1rem; align-items: center; }
+        .notification-bell {
+            position: relative; cursor: pointer; padding: 0.5rem; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1); transition: all 0.3s; display: none;
+        }
+        .notification-bell.show { display: block; }
+        .notification-bell:hover { background: rgba(255, 255, 255, 0.2); transform: scale(1.1); }
+        .notification-bell-icon { font-size: 1.5rem; color: white; }
+        .notification-badge {
+            position: absolute; top: -2px; right: -2px; background: #ef4444; color: white;
+            font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 10px;
+            min-width: 18px; text-align: center; animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .alerts-panel {
+            position: fixed; top: 73px; right: 0; width: 400px; max-width: 90vw;
+            height: calc(100vh - 73px); background: #1e293b; border-left: 2px solid #334155;
+            transform: translateX(100%); transition: transform 0.3s ease; z-index: 999;
+            display: flex; flex-direction: column;
+        }
+        .alerts-panel.open { transform: translateX(0); }
+        .alerts-header {
+            padding: 1.5rem; border-bottom: 1px solid #334155;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .alerts-title { font-size: 1.25rem; font-weight: 700; color: #E6007A; }
+        .alerts-actions { display: flex; gap: 0.5rem; }
+        .alerts-action-btn {
+            padding: 0.5rem 1rem; background: rgba(230, 0, 122, 0.1);
+            border: 1px solid #E6007A; color: #E6007A; border-radius: 0.5rem;
+            cursor: pointer; font-size: 0.75rem; font-weight: 600; transition: all 0.2s;
+        }
+        .alerts-action-btn:hover { background: #E6007A; color: white; }
+        .alerts-content { flex: 1; overflow-y: auto; padding: 1rem; }
+        .alert-item {
+            background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem;
+            padding: 1rem; margin-bottom: 1rem; transition: all 0.3s; cursor: pointer;
+        }
+        .alert-item:hover { border-color: #E6007A; transform: translateX(-4px); }
+        .alert-item.unread { border-color: #E6007A; background: rgba(230, 0, 122, 0.05); }
+        .alert-item-header {
+            display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;
+        }
+        .alert-item-severity {
+            display: inline-block; padding: 0.25rem 0.75rem; border-radius: 1rem;
+            font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+        }
+        .alert-item-severity.critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .alert-item-severity.info { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .alert-item-time { font-size: 0.75rem; color: #94a3b8; }
+        .alert-item-title { font-weight: 600; margin-bottom: 0.5rem; color: #e2e8f0; }
+        .alert-item-message { font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.75rem; }
+        .alert-item-actions { display: flex; gap: 0.5rem; }
+        .alert-item-btn {
+            padding: 0.375rem 0.75rem; background: transparent; border: 1px solid #334155;
+            color: #94a3b8; border-radius: 0.375rem; cursor: pointer;
+            font-size: 0.75rem; transition: all 0.2s;
+        }
+        .alert-item-btn:hover { border-color: #E6007A; color: #E6007A; }
+        .alert-item-btn.primary { background: #E6007A; border-color: #E6007A; color: white; }
+        .alerts-empty { text-align: center; padding: 3rem 1rem; color: #94a3b8; }
+        .alerts-empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+        .close-alerts-btn {
+            background: none; border: none; color: #94a3b8; font-size: 1.5rem;
+            cursor: pointer; padding: 0.25rem; line-height: 1;
+        }
+        .close-alerts-btn:hover { color: white; }
+        .btn {
+            padding: 0.625rem 1.25rem; border-radius: 0.5rem; border: none;
+            font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 0.875rem;
+        }
+        .btn-primary { background: white; color: #E6007A; }
+        body.logged-out .btn-primary { color: #3b82f6; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255, 255, 255, 0.3); }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.3); }
+        .user-info {
+            display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.15); border-radius: 2rem; font-size: 0.875rem;
+        }
+        nav {
+            background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid #334155;
+            position: sticky; top: 73px; z-index: 99; display: none;
+        }
+        nav.show { display: block; }
+        .nav-content { max-width: 1400px; margin: 0 auto; display: flex; gap: 0; overflow-x: auto; }
+        .nav-item {
+            padding: 1rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent;
+            transition: all 0.2s; white-space: nowrap; color: rgba(255, 255, 255, 0.7); font-weight: 500;
+        }
+        .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: white; }
+        .nav-item.active { color: white; border-bottom-color: #E6007A; }
+        main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .welcome-screen {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 60vh; text-align: center; padding: 2rem;
+        }
+        .welcome-screen h1 {
+            font-size: 3rem; font-weight: 800; margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, #e2e8f0 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .welcome-screen p { font-size: 1.25rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 2rem; max-width: 600px; }
+        .welcome-screen .btn-primary { padding: 1rem 2rem; font-size: 1rem; }
+        .feature-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 3rem;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.75rem; padding: 1.5rem; backdrop-filter: blur(10px);
+        }
+        .feature-card h3 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .feature-card p { color: rgba(255, 255, 255, 0.7); font-size: 0.875rem; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .kpi-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem;
+        }
+        .kpi-card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.5rem;
+            display: flex; justify-content: space-between; align-items: flex-start; transition: all 0.3s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-4px); box-shadow: 0 10px 30px rgba(230, 0, 122, 0.2); border-color: #E6007A;
+        }
+        .kpi-card.healthy { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); }
+        .kpi-content { flex: 1; }
+        .kpi-title {
+            font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0.5rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .kpi-value { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; color: #E6007A; }
+        .kpi-subtitle { font-size: 0.75rem; color: #94a3b8; }
+        .kpi-icon { font-size: 2rem; opacity: 0.6; }
+        .kpi-trend { margin-top: 0.75rem; font-size: 0.75rem; font-weight: 500; color: #10b981; }
+        .card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem;
+            margin-bottom: 1.5rem; overflow: hidden;
+        }
+        .card-header {
+            padding: 1.5rem; border-bottom: 1px solid #334155;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .card-title { font-size: 1.125rem; font-weight: 600; color: #E6007A; }
+        .card-description { font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem; }
+        .card-content { padding: 1.5rem; }
+        .chart-grid-2 {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem; margin-bottom: 1.5rem;
+        }
+        .chain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .chain-card {
+            background: #0f172a; border: 2px solid #334155; border-radius: 0.5rem;
+            padding: 1rem; transition: all 0.3s; cursor: pointer;
+        }
+        .chain-card:hover { border-color: #E6007A; transform: scale(1.02); }
+        .chain-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .chain-name { font-weight: 600; font-size: 0.875rem; }
+        .chain-badge {
+            display: inline-block; padding: 0.25rem 0.75rem; border-radius: 1rem;
+            font-size: 0.75rem; font-weight: 500;
+        }
+        .chain-badge.active { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .chain-badge.new { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .chain-stats { display: flex; gap: 1rem; font-size: 0.75rem; color: #94a3b8; }
+        .chain-stat { display: flex; flex-direction: column; }
+        .chain-stat-value { font-weight: 600; color: #e2e8f0; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem; }
+        .form-input, .form-select, .form-textarea {
+            width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid #334155;
+            border-radius: 0.5rem; color: #e2e8f0; font-size: 0.875rem;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: #E6007A; }
+        .form-textarea { resize: vertical; min-height: 100px; font-family: monospace; }
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8); z-index: 1000; align-items: center; justify-content: center; overflow-y: auto;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1e293b; border: 2px solid #334155; border-radius: 1rem; padding: 2rem;
+            max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; margin: 2rem;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;
+        }
+        .modal-title { font-size: 1.5rem; font-weight: 700; color: #E6007A; }
+        .close-btn { background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; }
+        .tabs {
+            display: flex; border-bottom: 2px solid #334155; margin-bottom: 1.5rem; gap: 0; overflow-x: auto;
+        }
+        .tab-button {
+            background: none; border: none; color: #94a3b8; padding: 0.75rem 1.5rem; cursor: pointer;
+            font-size: 0.875rem; font-weight: 500; border-bottom: 2px solid transparent;
+            transition: all 0.2s; white-space: nowrap;
+        }
+        .tab-button.active { color: #E6007A; border-bottom-color: #E6007A; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .code-block {
+            background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; padding: 1rem;
+            font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin-top: 0.5rem;
+            max-height: 400px; overflow-y: auto;
+        }
+        .alert { padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border: 1px solid; }
+        .alert-success { background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #10b981; }
+        .alert-error { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; color: #ef4444; }
+        .toast {
+            position: fixed; top: 100px; right: 20px; z-index: 10000; max-width: 400px; animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        /* Pricing Styles */
+        .pricing-hero {
+            text-align: center; padding: 3rem 0 2rem;
+            background: linear-gradient(135deg, rgba(230, 0, 122, 0.1) 0%, rgba(85, 43, 191, 0.1) 100%);
+            border-radius: 1rem; margin-bottom: 3rem; position: relative; overflow: hidden;
+        }
+        .pricing-hero-content { position: relative; z-index: 1; }
+        .pricing-hero h1 {
+            font-size: 3rem; font-weight: 900; margin-bottom: 1rem;
+            background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .pricing-hero p { font-size: 1.25rem; color: #94a3b8; max-width: 700px; margin: 0 auto; }
+        .pricing-toggle { display: flex; gap: 1rem; justify-content: center; align-items: center; margin: 2rem 0; }
+        .toggle-btn {
+            padding: 0.75rem 2rem; background: transparent; border: 2px solid #334155; border-radius: 2rem;
+            color: #94a3b8; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 1rem;
+        }
+        .toggle-btn.active {
+            background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+            border-color: transparent; color: white; box-shadow: 0 4px 20px rgba(230, 0, 122, 0.4);
+        }
+        .pricing-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 3rem;
+        }
+        .pricing-card {
+            background: #1e293b; border: 2px solid #334155; border-radius: 1.5rem; padding: 2.5rem;
+            position: relative; transition: all 0.3s; display: flex; flex-direction: column;
+        }
+        .pricing-card:hover {
+            transform: translateY(-8px); border-color: #E6007A; box-shadow: 0 20px 40px rgba(230, 0, 122, 0.3);
+        }
+        .pricing-card.featured {
+            border-color: #E6007A;
+            background: linear-gradient(135deg, rgba(230, 0, 122, 0.05) 0%, rgba(85, 43, 191, 0.05) 100%);
+            box-shadow: 0 10px 30px rgba(230, 0, 122, 0.2);
+        }
+        .pricing-badge {
+            display: none; position: absolute; top: -12px; right: 20px;
+            background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+            color: white; padding: 0.5rem 1.5rem; border-radius: 2rem; font-size: 0.75rem;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .pricing-card.featured .pricing-badge { display: block; }
+        .pricing-tier {
+            font-size: 0.875rem; color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 0.1em; margin-bottom: 0.5rem; font-weight: 600;
+        }
+        .pricing-name { font-size: 2rem; font-weight: 900; color: white; margin-bottom: 1rem; }
+        .pricing-price { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .pricing-amount {
+            font-size: 3.5rem; font-weight: 900;
+            background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .pricing-period { font-size: 1rem; color: #94a3b8; }
+        .pricing-description { color: #94a3b8; margin-bottom: 2rem; font-size: 0.875rem; line-height: 1.6; }
+        .pricing-features { list-style: none; margin-bottom: 2rem; flex: 1; }
+        .pricing-features li {
+            padding: 0.75rem 0; border-bottom: 1px solid #334155; display: flex;
+            align-items: flex-start; gap: 0.75rem; font-size: 0.875rem;
+        }
+        .pricing-features li:last-child { border-bottom: none; }
+        .pricing-features li::before {
+            content: '✓'; color: #10b981; font-weight: bold; font-size: 1.25rem; flex-shrink: 0;
+        }
+        .pricing-cta {
+            width: 100%; padding: 1rem 2rem;
+            background: linear-gradient(135deg, #E6007A 0%, #552BBF 100%);
+            color: white; border: none; border-radius: 0.75rem; font-weight: 700;
+            font-size: 1rem; cursor: pointer; transition: all 0.3s;
+        }
+        .pricing-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(230, 0, 122, 0.4); }
+        .pricing-cta.secondary { background: transparent; border: 2px solid #E6007A; color: #E6007A; }
+        .pricing-cta.secondary:hover { background: rgba(230, 0, 122, 0.1); }
+        
+        /* Payment Methods Styles */
+        .payment-methods {
+            background: #1e293b; border: 2px solid #334155; border-radius: 1rem; padding: 2rem; margin-bottom: 3rem;
+        }
+        .payment-methods h3 {
+            font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; text-align: center; color: #E6007A;
+        }
+        .payment-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+        .payment-option {
+            background: #0f172a; border: 2px solid #334155; border-radius: 0.75rem; padding: 1.5rem; transition: all 0.3s;
+        }
+        .payment-option:hover { border-color: #E6007A; transform: translateY(-4px); }
+        .payment-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+        .payment-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: white; }
+        .payment-desc { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1rem; }
+        .payment-example {
+            background: rgba(230, 0, 122, 0.05); border: 1px solid rgba(230, 0, 122, 0.2);
+            border-radius: 0.5rem; padding: 0.75rem; font-size: 0.75rem; color: #94a3b8; font-family: monospace;
+        }
+        
+        /* FAQ Styles */
+        .faq-section { background: #1e293b; border: 2px solid #334155; border-radius: 1rem; padding: 2rem; }
+        .faq-section h3 {
+            font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; text-align: center; color: #E6007A;
+        }
+        .faq-item {
+            background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.5rem;
+            margin-bottom: 1rem; cursor: pointer; transition: all 0.3s;
+        }
+        .faq-item:hover { border-color: #E6007A; }
+        .faq-question {
+            font-weight: 600; color: white; display: flex; justify-content: space-between; align-items: center;
+        }
+        .faq-answer { color: #94a3b8; margin-top: 1rem; font-size: 0.875rem; line-height: 1.6; display: none; }
+        .faq-item.active .faq-answer { display: block; }
+        .faq-toggle { font-size: 1.5rem; transition: transform 0.3s; }
+        .faq-item.active .faq-toggle { transform: rotate(45deg); }
+        
+        @media (max-width: 768px) {
+            .chart-grid-2, .kpi-grid, .chain-grid, .feature-grid, .pricing-grid { grid-template-columns: 1fr; }
+            main, header { padding: 1rem; }
+            .header-content { flex-direction: column; gap: 1rem; }
+            .alerts-panel { width: 100%; }
+            .pricing-hero h1 { font-size: 2rem; }
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="logged-out">
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <div class="logo-text">Nani<span class="logo-plus">PLUS</span></div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div id="userInfo" class="user-info" style="display: none;"></div>
+                <button id="notificationBell" class="notification-bell" onclick="toggleAlertsPanel()">
+                    <span class="notification-bell-icon">🔔</span>
+                    <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
+                </button>
+                <button id="loginBtn" class="btn btn-primary" onclick="showLoginModal()">🔐 Login</button>
+                <button id="logoutBtn" class="btn btn-secondary" onclick="logout()" style="display: none;">🚪 Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <div id="alertsPanel" class="alerts-panel">
+        <div class="alerts-header">
+            <h2 class="alerts-title">Alerts</h2>
+            <div class="alerts-actions">
+                <button class="alerts-action-btn" onclick="markAllRead()">Mark All Read</button>
+                <button class="close-alerts-btn" onclick="toggleAlertsPanel()">✕</button>
+            </div>
+        </div>
+        <div class="alerts-content">
+            <div id="alertsContent"></div>
+        </div>
+    </div>
+
+    <nav id="mainNav">
+        <div class="nav-content">
+            <div class="nav-item active" onclick="switchSection('dashboard')">📊 Dashboard</div>
+            <div class="nav-item" onclick="switchSection('chains')">🔗 Chains</div>
+            <div class="nav-item" onclick="switchSection('analytics')">📈 Analytics</div>
+            <div class="nav-item" onclick="switchSection('dev-tools')">🛠️ Dev Tools</div>
+            <div class="nav-item" onclick="switchSection('pricing')">💳 Pricing</div>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Welcome Section (Logged Out) -->
+        <section id="welcome-section" class="section active">
+            <div class="welcome-screen">
+                <h1>Nani Plus 🚀</h1>
+                <p>Blockchain Event Monitoring & Intelligence Platform</p>
+                <button class="btn btn-primary" onclick="showLoginModal()">Get Started</button>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>⚡ Real-Time Events</h3>
+                        <p>Monitor blockchain events with sub-second latency</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔔 Smart Alerts</h3>
+                        <p>Customizable notifications via Discord, Email & Webhook</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📊 Analytics</h3>
+                        <p>Deep insights with AI-powered analysis</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔐 Enterprise Ready</h3>
+                        <p>Multi-chain support with advanced filtering</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing Section with Payment Methods and FAQ -->
+        <section id="pricing-section" class="section">
+            <div class="pricing-hero">
+                <div class="pricing-hero-content">
+                    <h1>Choose Your Plan</h1>
+                    <p>Flexible pricing for developers, teams, and enterprises. Start free, scale as you grow.</p>
+                    <div class="pricing-toggle">
+                        <button class="toggle-btn active" id="stripeToggle" onclick="togglePaymentMode('stripe')">💳 Stripe (Monthly)</button>
+                        <button class="toggle-btn" id="cryptoToggle" onclick="togglePaymentMode('crypto')">⚡ Crypto (Pay-as-you-go)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="stripePricing" class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="pricing-tier">Free Tier</div>
+                    <div class="pricing-name">Hobbyist</div>
+                    <div class="pricing-price"><div class="pricing-amount">$0</div><div class="pricing-period">/mo</div></div>
+                    <div class="pricing-description">Perfect for personal projects and learning</div>
+                    <ul class="pricing-features">
+                        <li>30 event notifications/month</li>
+                        <li>5 concurrent subscriptions</li>
+                        <li>Community support</li>
+                        <li>All open-source plugins</li>
+                        <li>Self-hosted deployment</li>
+                    </ul>
+                    <button class="pricing-cta secondary" onclick="selectPlan('hobbyist', 'stripe')">Get Started Free</button>
+                </div>
+
+                <div class="pricing-card featured">
+                    <div class="pricing-badge">Most Popular</div>
+                    <div class="pricing-tier">For Developers</div>
+                    <div class="pricing-name">Pro</div>
+                    <div class="pricing-price"><div class="pricing-amount">$49.99</div><div class="pricing-period">/mo</div></div>
+                    <div class="pricing-description">Ideal for mobile wallets & small dApps</div>
+                    <ul class="pricing-features">
+                        <li>10,000 events/month</li>
+                        <li>50 concurrent subscriptions</li>
+                        <li>99.9% SLA uptime</li>
+                        <li>Email support (24h response)</li>
+                        <li>14-day free trial</li>
+                        <li>Managed hosting</li>
+                    </ul>
+                    <button class="pricing-cta" onclick="selectPlan('pro', 'stripe')">Start Free Trial</button>
+                </div>
+
+                <div class="pricing-card">
+                    <div class="pricing-tier">For Teams</div>
+                    <div class="pricing-name">Enterprise</div>
+                    <div class="pricing-price"><div class="pricing-amount">$199.99</div><div class="pricing-period">/mo</div></div>
+                    <div class="pricing-description">Built for DeFi protocols & exchanges</div>
+                    <ul class="pricing-features">
+                        <li>100,000 events/month</li>
+                        <li>500 concurrent subscriptions</li>
+                        <li>99.99% SLA uptime</li>
+                        <li>Priority support (4h response)</li>
+                        <li>Dedicated Slack channel</li>
+                        <li>Advanced analytics</li>
+                    </ul>
+                    <button class="pricing-cta" onclick="selectPlan('enterprise', 'stripe')">Contact Sales</button>
+                </div>
+
+                <div class="pricing-card">
+                    <div class="pricing-tier">Custom</div>
+                    <div class="pricing-name">Accelerator</div>
+                    <div class="pricing-price"><div class="pricing-amount">$499</div><div class="pricing-period">/mo</div></div>
+                    <div class="pricing-description">White-label for accelerators & institutions</div>
+                    <ul class="pricing-features">
+                        <li>Unlimited events</li>
+                        <li>Unlimited subscriptions</li>
+                        <li>99.999% SLA uptime</li>
+                        <li>White-label option</li>
+                        <li>Dedicated infrastructure</li>
+                        <li>Custom plugin development</li>
+                    </ul>
+                    <button class="pricing-cta" onclick="selectPlan('accelerator', 'stripe')">Contact Sales</button>
+                </div>
+            </div>
+
+            <!-- Crypto Payment Options -->
+            <div id="cryptoPricing" style="display: none;">
+                <div class="payment-methods">
+                    <h3>Pay-as-you-go with Crypto</h3>
+                    <p style="text-align: center; color: #94a3b8; margin-bottom: 2rem;">Powered by x402 micropayment protocol. Only pay for what you use.</p>
+                    <div class="payment-options">
+                        <div class="payment-option">
+                            <div class="payment-icon">⚡</div>
+                            <div class="payment-title">Event Subscriptions</div>
+                            <div class="payment-desc">Stream real-time blockchain events</div>
+                            <div class="payment-example">$0.0001 per event</div>
+                        </div>
+                        <div class="payment-option">
+                            <div class="payment-icon">📊</div>
+                            <div class="payment-title">Basic Stats</div>
+                            <div class="payment-desc">Query analytics endpoints</div>
+                            <div class="payment-example">$0.001 per query</div>
+                        </div>
+                        <div class="payment-option">
+                            <div class="payment-icon">📥</div>
+                            <div class="payment-title">Data Export</div>
+                            <div class="payment-desc">Download historical data</div>
+                            <div class="payment-example">$0.01 per export</div>
+                        </div>
+                        <div class="payment-option">
+                            <div class="payment-icon">🤖</div>
+                            <div class="payment-title">AI Analytics</div>
+                            <div class="payment-desc">Get AI-powered insights</div>
+                            <div class="payment-example">$0.05 per query</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="faq-section">
+                <h3>Frequently Asked Questions</h3>
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question"><span>What's the difference between Stripe and x402 pricing?</span><span class="faq-toggle">+</span></div>
+                    <div class="faq-answer">Stripe offers predictable monthly subscriptions with set limits, perfect for teams and businesses. x402 offers pay-as-you-go micropayments using crypto, ideal for AI agents, developers testing, and users who prefer granular control over spending.</div>
+                </div>
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question"><span>Can I switch between plans?</span><span class="faq-toggle">+</span></div>
+                    <div class="faq-answer">Yes! You can upgrade or downgrade your Stripe plan anytime. For x402, you can switch to Stripe monthly billing or vice versa. We'll pro-rate charges accordingly.</div>
+                </div>
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question"><span>What chains are supported?</span><span class="faq-toggle">+</span></div>
+                    <div class="faq-answer">Currently: Polkadot, Kusama, Westend, and Asset Hub. Coming soon: Ethereum, Base, Bitcoin, Solana, NEAR, Cosmos Hub, and SUI. All plans include multi-chain support.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard Section (Logged In) -->
+        <section id="dashboard-section" class="section">
+            <div style="margin-bottom: 2rem;">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">📊 Dashboard</h2>
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card healthy">
+                    <div class="kpi-content">
+                        <div class="kpi-title">Events (24h)</div>
+                        <div class="kpi-value" id="events24h">0</div>
+                        <div class="kpi-subtitle" id="eventsChange">Loading...</div>
+                    </div>
+                    <div class="kpi-icon">📊</div>
+                </div>
+                <div class="kpi-card healthy">
+                    <div class="kpi-content">
+                        <div class="kpi-title">Notifications Sent</div>
+                        <div class="kpi-value" id="notificationsSent">0</div>
+                        <div class="kpi-subtitle" id="notifChange">Loading...</div>
+                    </div>
+                    <div class="kpi-icon">🔔</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Events Timeline</div>
+                        <div class="card-description">Last 24 hours activity</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="eventChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chains Section -->
+        <section id="chains-section" class="section">
+            <div style="margin-bottom: 2rem;">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">🔗 Blockchain Chains</h2>
+                <p style="color: #94a3b8;">Click on a chain to configure monitoring</p>
+            </div>
+            <div class="chain-grid">
+                <div class="chain-card" onclick="openSetupModal('ethereum')">
+                    <div class="chain-header">
+                        <span class="chain-name">Ethereum</span>
+                        <span class="chain-badge active">Active</span>
+                    </div>
+                    <div class="chain-stats">
+                        <div class="chain-stat">
+                            <span style="color: #94a3b8;">Status</span>
+                            <span class="chain-stat-value">Online</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chain-card" onclick="openSetupModal('polygon')">
+                    <div class="chain-header">
+                        <span class="chain-name">Polygon</span>
+                        <span class="chain-badge new">New</span>
+                    </div>
+                    <div class="chain-stats">
+                        <div class="chain-stat">
+                            <span style="color: #94a3b8;">Status</span>
+                            <span class="chain-stat-value">Available</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chain-card" onclick="openSetupModal('arbitrum')">
+                    <div class="chain-header">
+                        <span class="chain-name">Arbitrum</span>
+                        <span class="chain-badge active">Active</span>
+                    </div>
+                    <div class="chain-stats">
+                        <div class="chain-stat">
+                            <span style="color: #94a3b8;">Status</span>
+                            <span class="chain-stat-value">Online</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chain-card" onclick="openSetupModal('optimism')">
+                    <div class="chain-header">
+                        <span class="chain-name">Optimism</span>
+                        <span class="chain-badge new">New</span>
+                    </div>
+                    <div class="chain-stats">
+                        <div class="chain-stat">
+                            <span style="color: #94a3b8;">Status</span>
+                            <span class="chain-stat-value">Available</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chain-card" onclick="openSetupModal('base')">
+                    <div class="chain-header">
+                        <span class="chain-name">Base</span>
+                        <span class="chain-badge new">New</span>
+                    </div>
+                    <div class="chain-stats">
+                        <div class="chain-stat">
+                            <span style="color: #94a3b8;">Status</span>
+                            <span class="chain-stat-value">Available</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chain-card" onclick="openSetupModal('solana')">
+                    <div class="chain-header">
+                        <span class="chain-name">Solana</span>
+                        <span class="chain-badge new">New</span>
+                    </div>
+                    <div class="chain-stats">
+                        <div class="chain-stat">
+                            <span style="color: #94a3b8;">Status</span>
+                            <span class="chain-stat-value">Available</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section id="analytics-section" class="section">
+            <div style="margin-bottom: 2rem;">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">📈 Advanced Analytics</h2>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Analytics Tools</div>
+                        <div class="card-description">View your blockchain analytics</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="tabs">
+                        <button class="tab-button active" onclick="switchTab(event, 'basicStats')">Basic Stats</button>
+                        <button class="tab-button" onclick="switchTab(event, 'advancedStats')">Advanced Stats</button>
+                        <button class="tab-button" onclick="switchTab(event, 'aiInsights')">AI Insights</button>
+                    </div>
+                    <div id="basicStats" class="tab-content active">
+                        <button class="btn btn-primary" onclick="fetchBasicStats()" style="margin-bottom: 1rem;">📊 Fetch Basic Stats</button>
+                        <div id="basicStatsResult"></div>
+                    </div>
+                    <div id="advancedStats" class="tab-content">
+                        <button class="btn btn-primary" onclick="fetchAdvancedStats()" style="margin-bottom: 1rem;">📈 Fetch Advanced Stats</button>
+                        <div id="advancedStatsResult"></div>
+                    </div>
+                    <div id="aiInsights" class="tab-content">
+                        <div class="form-group">
+                            <label class="form-label">Query</label>
+                            <input type="text" id="aiQuery" class="form-input" placeholder="Ask me about your data...">
+                        </div>
+                        <button class="btn btn-primary" onclick="fetchAIInsights()" style="margin-bottom: 1rem;">🤖 Get AI Insights</button>
+                        <div id="aiInsightsResult"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dev Tools Section -->
+        <section id="dev-tools-section" class="section">
+            <div style="margin-bottom: 2rem;">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">🛠️ Developer Tools</h2>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">JWT Token</div>
+                        <div class="card-description">Your API authentication token</div>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="code-block" id="jwtTokenDisplay">Not logged in</div>
+                    <button class="btn btn-primary" onclick="copyToken()" style="margin-top: 1rem; width: 100%;">📋 Copy Token</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🔐 Login</h2>
+                <button class="close-btn" onclick="closeLoginModal()">×</button>
+            </div>
+            <form onsubmit="login(event)">
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" id="loginEmail" class="form-input" placeholder="you@example.com" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">🚀 Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Chain Setup Modal -->
+    <div id="setupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">⚙️ Setup <span id="setupChainName"></span></h2>
+                <button class="close-btn" onclick="closeSetupModal()">×</button>
+            </div>
+            <form onsubmit="submitSetup(event)">
+                <input type="hidden" id="setupChainId">
+                <div class="form-group">
+                    <label class="form-label">Monitoring Mode</label>
+                    <select class="form-select" id="setupMode" onchange="toggleAddressField()">
+                        <option value="personal">Personal - Monitor specific addresses</option>
+                        <option value="global">Global - Monitor all chain activity</option>
+                    </select>
+                </div>
+                <div class="form-group" id="addressGroup">
+                    <label class="form-label">Wallet Addresses (one per line)</label>
+                    <textarea class="form-textarea" id="setupAddresses" placeholder="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Events to Monitor</label>
+                    <div style="display: grid; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" name="activities" value="transfer" checked><span>💸 Transfers</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" name="activities" value="staking"><span>🔒 Staking</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" name="activities" value="governance"><span>🗳️ Governance</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notification Channel (Optional)</label>
+                    <select class="form-select" id="notificationType">
+                        <option value="">None</option>
+                        <option value="discord">Discord Webhook</option>
+                        <option value="webhook">Custom Webhook</option>
+                    </select>
+                </div>
+                <div class="form-group" id="notificationConfigGroup" style="display: none;">
+                    <label class="form-label">Webhook URL</label>
+                    <input type="url" class="form-input" id="notificationConfig" placeholder="https://discord.com/api/webhooks/...">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">💾 Save Configuration</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Subscription Modal -->
+    <div id="subscriptionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Subscribe to <span id="selectedPlanName"></span></h2>
+                <button class="close-btn" onclick="closeSubscriptionModal()">×</button>
+            </div>
+            <form onsubmit="submitSubscription(event)">
+                <input type="hidden" id="selectedPlan">
+                <input type="hidden" id="selectedPaymentType">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="subscriptionEmail" required placeholder="billing@company.com">
+                </div>
+                <div class="form-group" id="cardDetailsGroup">
+                    <label class="form-label">Card Details</label>
+                    <input type="text" class="form-input" id="cardNumber" placeholder="4242 4242 4242 4242" maxlength="19">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+                        <input type="text" class="form-input" id="cardExpiry" placeholder="MM/YY" maxlength="5">
+                        <input type="text" class="form-input" id="cardCvc" placeholder="CVC" maxlength="4">
+                    </div>
+                </div>
+                <div class="form-group" id="walletGroup" style="display: none;">
+                    <label class="form-label">Wallet Address</label>
+                    <input type="text" class="form-input" id="walletAddress" placeholder="0x... or base58 address">
+                    <button type="button" class="btn btn-secondary" onclick="connectWallet()" style="width: 100%; margin-top: 0.5rem;">Connect Wallet</button>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">🚀 Confirm Subscription</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://nani-production-c105.up.railway.app';
+        let authToken = localStorage.getItem('nani_plus_token');
+        let tenantId = localStorage.getItem('nani_plus_tenant');
+        let eventChart, alertsPanelOpen = false, alertsPollingInterval, currentPaymentMode = 'stripe';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (authToken) {
+                updateUIForLoggedIn();
+                loadDashboard();
+                initCharts();
+                startAlertsPolling();
+            } else {
+                switchSection('pricing');
+            }
+            document.getElementById('notificationType').addEventListener('change', function() {
+                document.getElementById('notificationConfigGroup').style.display = this.value ? 'block' : 'none';
+            });
+        });
+
+        function updateUIForLoggedIn() {
+            document.body.classList.remove('logged-out');
+            document.getElementById('mainNav').classList.add('show');
+            document.getElementById('welcome-section').style.display = 'none';
+            document.getElementById('userInfo').innerHTML = `<span>👤 ${tenantId?.substring(0, 8) || 'User'}</span>`;
+            document.getElementById('loginBtn').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'block';
+            document.getElementById('notificationBell').classList.add('show');
+            document.getElementById('jwtTokenDisplay').textContent = authToken;
+        }
+
+        function switchSection(section) {
+            const protectedSections = ['dashboard', 'setup', 'analytics', 'dev-tools'];
+            if (protectedSections.includes(section) && !authToken) {
+                showToast('⚠️ Please login to access this section', 'error');
+                showLoginModal();
+                return;
+            }
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(`${section}-section`).classList.add('active');
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                if (item.textContent.toLowerCase().includes(section) || (section === 'pricing' && item.textContent.includes('💳'))) {
+                    item.classList.add('active');
+                }
+            });
+            if (section === 'dashboard' && authToken) loadDashboard();
+        }
+
+        function showLoginModal() { document.getElementById('loginModal').classList.add('active'); }
+        function closeLoginModal() { document.getElementById('loginModal').classList.remove('active'); }
+
+        async function login(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await response.json();
+                if (data.token) {
+                    authToken = data.token;
+                    tenantId = data.tenantId;
+                    localStorage.setItem('nani_plus_token', authToken);
+                    localStorage.setItem('nani_plus_tenant', tenantId);
+                    updateUIForLoggedIn();
+                    closeLoginModal();
+                    switchSection('dashboard');
+                    loadDashboard();
+                    initCharts();
+                    startAlertsPolling();
+                    showToast('✅ Login successful!', 'success');
+                } else {
+                    showToast('❌ ' + (data.error || 'Login failed'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ Network error: ' + error.message, 'error');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('nani_plus_token');
+            localStorage.removeItem('nani_plus_tenant');
+            if (alertsPollingInterval) clearInterval(alertsPollingInterval);
+            window.location.reload();
+        }
+
+        async function loadDashboard() {
+            if (!authToken) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                document.getElementById('events24h').textContent = data.stats?.eventsProcessed24h || 0;
+                document.getElementById('notificationsSent').textContent = data.stats?.notificationsSent24h || 0;
+            } catch (error) {
+                console.error('Dashboard error:', error);
+            }
+        }
+
+        function toggleAlertsPanel() {
+            if (!authToken) {
+                showToast('⚠️ Please login to view notifications', 'error');
+                return;
+            }
+            alertsPanelOpen = !alertsPanelOpen;
+            const panel = document.getElementById('alertsPanel');
+            if (alertsPanelOpen) {
+                panel.classList.add('open');
+                loadAlerts();
+            } else {
+                panel.classList.remove('open');
+            }
+        }
+
+        async function loadAlerts() {
+            if (!authToken) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/alerts/unread`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                displayAlerts(data.alerts || []);
+                updateNotificationBadge(data.count || 0);
+            } catch (error) {
+                console.error('Failed to load alerts:', error);
+            }
+        }
+
+        function displayAlerts(alerts) {
+            const container = document.getElementById('alertsContent');
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = '<div class="alerts-empty"><div class="alerts-empty-icon">🔔</div><p>No new alerts</p></div>';
+                return;
+            }
+            container.innerHTML = alerts.map(alert => `
+                <div class="alert-item ${alert.read ? '' : 'unread'} ${alert.severity}">
+                    <div class="alert-item-header">
+                        <span class="alert-item-severity ${alert.severity}">${alert.severity}</span>
+                        <span class="alert-item-time">${formatAlertTime(alert.timestamp)}</span>
+                    </div>
+                    <div class="alert-item-title">${alert.title}</div>
+                    <div class="alert-item-message">${alert.message}</div>
+                    <div class="alert-item-actions">
+                        ${!alert.read ? `<button class="alert-item-btn primary" onclick="markAlertRead('${alert.id}')">Mark Read</button>` : ''}
+                        <button class="alert-item-btn" onclick="dismissAlert('${alert.id}')">Dismiss</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateNotificationBadge(count) {
+            const badge = document.getElementById('notificationBadge');
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'block' : 'none';
+        }
+
+        async function markAlertRead(alertId) {
+            if (!authToken) return;
+            try {
+                await fetch(`${API_BASE_URL}/api/alerts/${alertId}/read`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                loadAlerts();
+            } catch (error) {
+                console.error('Failed to mark alert as read:', error);
+            }
+        }
+
+        async function dismissAlert(alertId) {
+            if (!authToken) return;
+            try {
+                await fetch(`${API_BASE_URL}/api/alerts/${alertId}/dismiss`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                loadAlerts();
+            } catch (error) {
+                console.error('Failed to dismiss alert:', error);
+            }
+        }
+
+        async function markAllRead() {
+            if (!authToken) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/alerts/unread`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                const alerts = data.alerts || [];
+                for (const alert of alerts) await markAlertRead(alert.id);
+                loadAlerts();
+                showToast('✅ All alerts marked as read', 'success');
+            } catch (error) {
+                console.error('Failed to mark all as read:', error);
+            }
+        }
+
+        function startAlertsPolling() {
+            loadAlerts();
+            alertsPollingInterval = setInterval(() => loadAlerts(), 30000);
+        }
+
+        function formatAlertTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return `${days}d ago`;
+        }
+
+        function togglePaymentMode(mode) {
+            currentPaymentMode = mode;
+            document.getElementById('stripePricing').style.display = mode === 'stripe' ? 'grid' : 'none';
+            document.getElementById('cryptoPricing').style.display = mode === 'crypto' ? 'block' : 'none';
+            document.getElementById('stripeToggle').classList.toggle('active', mode === 'stripe');
+            document.getElementById('cryptoToggle').classList.toggle('active', mode === 'crypto');
+        }
+
+        function selectPlan(plan, paymentType) {
+            if (!authToken) {
+                showToast('⚠️ Please login first', 'error');
+                showLoginModal();
+                return;
+            }
+            document.getElementById('selectedPlan').value = plan;
+            document.getElementById('selectedPaymentType').value = paymentType;
+            document.getElementById('selectedPlanName').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+            if (paymentType === 'stripe') {
+                document.getElementById('cardDetailsGroup').style.display = 'block';
+                document.getElementById('walletGroup').style.display = 'none';
+            } else {
+                document.getElementById('cardDetailsGroup').style.display = 'none';
+                document.getElementById('walletGroup').style.display = 'block';
+            }
+            document.getElementById('subscriptionModal').classList.add('active');
+        }
+
+        function closeSubscriptionModal() { document.getElementById('subscriptionModal').classList.remove('active'); }
+
+        async function submitSubscription(e) {
+            e.preventDefault();
+            if (!authToken) {
+                showToast('⚠️ Please login first', 'error');
+                return;
+            }
+            const plan = document.getElementById('selectedPlan').value;
+            const paymentType = document.getElementById('selectedPaymentType').value;
+            const email = document.getElementById('subscriptionEmail').value;
+            try {
+                let requestBody = { tenantId, email, plan };
+                if (paymentType === 'stripe') {
+                    requestBody.paymentMethodId = 'pm_card_visa';
+                } else {
+                    requestBody.walletAddress = document.getElementById('walletAddress').value;
+                }
+                const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('✅ Subscription successful!', 'success');
+                    closeSubscriptionModal();
+                } else {
+                    showToast('❌ ' + (data.error || 'Subscription failed'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ Network error: ' + error.message, 'error');
+            }
+        }
+
+        function connectWallet() { showToast('🔗 Opening wallet connection...', 'success'); }
+        function toggleFaq(element) { element.classList.toggle('active'); }
+
+        function openSetupModal(chainId) {
+            if (!authToken) {
+                showToast('⚠️ Please login first', 'error');
+                showLoginModal();
+                return;
+            }
+            document.getElementById('setupChainId').value = chainId;
+            document.getElementById('setupChainName').textContent = chainId.charAt(0).toUpperCase() + chainId.slice(1);
+            document.getElementById('setupModal').classList.add('active');
+        }
+
+        function closeSetupModal() { document.getElementById('setupModal').classList.remove('active'); }
+
+        function toggleAddressField() {
+            const mode = document.getElementById('setupMode').value;
+            document.getElementById('addressGroup').style.display = mode === 'personal' ? 'block' : 'none';
+        }
+
+        async function submitSetup(e) {
+            e.preventDefault();
+            if (!authToken) {
+                showToast('⚠️ Please login first', 'error');
+                return;
+            }
+            const chainId = document.getElementById('setupChainId').value;
+            const mode = document.getElementById('setupMode').value;
+            const addresses = document.getElementById('setupAddresses').value.split('\n').map(a => a.trim()).filter(Boolean);
+            const activities = Array.from(document.querySelectorAll('input[name="activities"]:checked')).map(cb => cb.value);
+            const notifType = document.getElementById('notificationType').value;
+            const notifConfig = document.getElementById('notificationConfig').value;
+            const notifications = notifType ? [{
+                type: notifType,
+                config: notifType === 'discord' || notifType === 'webhook' ? { webhookUrl: notifConfig } : {}
+            }] : [];
+            try {
+                const response = await fetch(`${API_BASE_URL}/setup`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        setups: [{
+                            chainId,
+                            monitoringMode: mode,
+                            addresses: mode === 'personal' ? addresses : undefined,
+                            plugins: { activities, notifications }
+                        }]
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('✅ Configuration saved successfully!', 'success');
+                    closeSetupModal();
+                    loadDashboard();
+                } else {
+                    showToast('❌ ' + (data.message || 'Configuration failed'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function fetchBasicStats() {
+            if (!authToken) { showToast('⚠️ Please login first', 'error'); return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/stats/basic`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                document.getElementById('basicStatsResult').innerHTML = `<div class="code-block">${JSON.stringify(data, null, 2)}</div>`;
+            } catch (error) {
+                showToast(`❌ Failed to fetch analytics: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchAdvancedStats() {
+            if (!authToken) { showToast('⚠️ Please login first', 'error'); return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/stats/advanced`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+                document.getElementById('advancedStatsResult').innerHTML = `<div class="code-block">${JSON.stringify(data, null, 2)}</div>`;
+            } catch (error) {
+                showToast(`❌ Failed to fetch advanced analytics: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchAIInsights() {
+            if (!authToken) { showToast('⚠️ Please login first', 'error'); return; }
+            const query = document.getElementById('aiQuery').value;
+            if (!query) { showToast('⚠️ Please enter a query', 'error'); return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/stats/ai`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+                document.getElementById('aiInsightsResult').innerHTML = `<div class="code-block">${JSON.stringify(data, null, 2)}</div>`;
+            } catch (error) {
+                showToast(`❌ AI query failed: ${error.message}`, 'error');
+            }
+        }
+
+        function copyToken() {
+            if (!authToken) { showToast('⚠️ Please login first', 'error'); return; }
+            navigator.clipboard.writeText(authToken);
+            showToast('📋 Token copied to clipboard!', 'success');
+        }
+
+        function switchTab(e, tabId) {
+            const parent = e.target.closest('.card-content');
+            parent.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            parent.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            parent.querySelector(`#${tabId}`).classList.add('active');
+            e.target.classList.add('active');
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `toast alert alert-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        function initCharts() {
+            const chartConfig = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(51, 65, 85, 0.3)', drawBorder: false },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(51, 65, 85, 0.3)', drawBorder: false },
+                        ticks: { color: '#94a3b8' }
+                    }
+                }
+            };
+            const eventCtx = document.getElementById('eventChart').getContext('2d');
+            const eventData = Array.from({ length: 24 }, (_, i) => ({
+                time: `${i}:00`,
+                value: Math.floor(Math.random() * 500) + 100
+            }));
+            eventChart = new Chart(eventCtx, {
+                type: 'line',
+                data: {
+                    labels: eventData.map(d => d.time),
+                    datasets: [{
+                        data: eventData.map(d => d.value),
+                        borderColor: '#E6007A',
+                        backgroundColor: 'rgba(230, 0, 122, 0.1)',
+                        fill: true,
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: chartConfig
+            });
+        }
+    </script>
 </body>
 </html>

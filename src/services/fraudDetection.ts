@@ -240,51 +240,65 @@ export async function saveTrialRecord(record: TrialRecord): Promise<void> {
 
 async function getTrialsByFingerprint(fingerprintHash: string): Promise<TrialRecord[]> {
   try {
-    // Query all trial records with this fingerprint
-    const db = await storage.getDb();
-    const snapshot = await db
-      .ref('configs')
-      .query()
-      .filter('fingerprintHash', '==', fingerprintHash)
-      .get();
+    // Query MongoDB configs collection for trial records with this fingerprint
+    const db = storage.getDb();
+    const collection = db.collection('configs');
+    
+    // Find all documents where chainId is 'trial_record'
+    const docs = await collection
+      .find({ chainId: 'trial_record' })
+      .toArray();
 
     const trials: TrialRecord[] = [];
     
-    snapshot.forEach((child: any) => {
-      const data = child.val();
-      if (data && data.fingerprintHash === fingerprintHash) {
-        trials.push(storage.decrypt(data) as TrialRecord);
+    for (const doc of docs) {
+      try {
+        if (doc.encryptedData) {
+          const decrypted = storage.decrypt(doc.encryptedData) as TrialRecord;
+          if (decrypted.fingerprintHash === fingerprintHash) {
+            trials.push(decrypted);
+          }
+        }
+      } catch (err) {
+        logger.warn(`Failed to decrypt trial record ${doc._id}: ${err}`);
       }
-    });
+    }
 
     return trials;
-  } catch (error) {
-    logger.error(`Error fetching trials by fingerprint: ${error}`);
+  } catch (error: any) {
+    logger.error(`Error fetching trials by fingerprint: ${error.message}`);
     return [];
   }
 }
 
 async function getTrialsByIp(ip: string): Promise<TrialRecord[]> {
   try {
-    const db = await storage.getDb();
-    const snapshot = await db
-      .ref('configs')
-      .query()
-      .filter('ip', '==', ip)
-      .get();
+    const db = storage.getDb();
+    const collection = db.collection('configs');
+    
+    // Find all trial records
+    const docs = await collection
+      .find({ chainId: 'trial_record' })
+      .toArray();
 
     const trials: TrialRecord[] = [];
     
-    snapshot.forEach((child: any) => {
-      const data = child.val();
-      if (data && data.ip === ip) {
-        trials.push(storage.decrypt(data) as TrialRecord);
+    for (const doc of docs) {
+      try {
+        if (doc.encryptedData) {
+          const decrypted = storage.decrypt(doc.encryptedData) as TrialRecord;
+          if (decrypted.ip === ip) {
+            trials.push(decrypted);
+          }
+        }
+      } catch (err) {
+        logger.warn(`Failed to decrypt trial record ${doc._id}: ${err}`);
       }
-    });
+    }
 
     return trials;
-  } catch (error) {
-    logger.error(`Error fetching trials by IP: ${error}`);
+  } catch (error: any) {
+    logger.error(`Error fetching trials by IP: ${error.message}`);
     return [];
   }
 }

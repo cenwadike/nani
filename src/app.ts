@@ -57,7 +57,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
-import { limiter, verifyToken } from './middlewares/auth';
+import { limiter, verifyToken } from './middlewares/user.auth';
 import errorHandler from './middlewares/errorHandler';
 import { enforceTrialLimits } from './middlewares/trialEnforcement';
 import { initializeMonitoring } from './monitoring/metrics';
@@ -67,58 +67,62 @@ import logger from './utils/logger';
 import { loadSwaggerDocument } from './utils/swagger';
 
 // Import all routes
-import authRouter from './routes/auth';
+import adminAuthRouter from './routes/admin.auth';
+import authRouter from './routes/user.auth';
 import setupRouter from './routes/setup';
 import exportRouter from './routes/export';
 import healthRouter from './routes/health';
 import trialRouter from './routes/trial';
 import analyticsRouter from './routes/analytics';
 import alertsRouter from './routes/alerts';
+import subscriptionRouter from './routes/subscription';
 import x402Router from './routes/x402';
+import { adminLimiter, verifyAdminToken } from './middlewares/admin.auth';
 
 const app: Application = express();
 
 // ————————————————————————————————
 // DATABASE INITIALIZATION
 // ————————————————————————————————
-let dbInitialized = false;
-
 (async () => {
   try {
     logger.info('Starting database initialization...');
     
     await storage.initDb();
-    logger.info('✓ AceBase database initialized successfully');
+    logger.info('✓ MongoDB database initialized successfully');
 
     const db = storage.getDb();
     
-    // Initialize empty structures
+    // Initialize collections and indexes (MongoDB automatically creates collections on first write)
     try {
-      const configsSnapshot = await db.ref('configs').get();
-      if (!configsSnapshot.exists()) {
-        logger.info('Initializing empty configs structure...');
-        await db.ref('configs').set({});
+      // Check if configs collection exists and has documents
+      const configsCount = await db.collection('configs').countDocuments({}, { limit: 1 });
+      
+      if (configsCount === 0) {
+        logger.info('Configs collection is empty (will be created on first write)');
+      } else {
+        logger.info(`Configs collection initialized with ${configsCount} documents`);
       }
     } catch (err: any) {
-      logger.warn(`Could not check configs: ${err.message}`);
-      await db.ref('configs').set({}).catch(() => {});
+      logger.warn(`Could not check configs collection: ${err.message}`);
     }
 
     try {
-      const logsSnapshot = await db.ref('logs').get();
-      if (!logsSnapshot.exists()) {
-        logger.info('Initializing empty logs structure...');
-        await db.ref('logs').set({});
+      // Check if logs collection exists and has documents
+      const logsCount = await db.collection('logs').countDocuments({}, { limit: 1 });
+      
+      if (logsCount === 0) {
+        logger.info('Logs collection is empty (will be created on first write)');
+      } else {
+        logger.info(`Logs collection initialized with ${logsCount} documents`);
       }
     } catch (err: any) {
-      logger.warn(`Could not check logs: ${err.message}`);
-      await db.ref('logs').set({}).catch(() => {});
+      logger.warn(`Could not check logs collection: ${err.message}`);
     }
 
-    dbInitialized = true;
     logger.info('✓ Database structure initialized');
 
-    // Start Admin GUI if enabled
+    // Start Admin GUI info if enabled
     const adminGuiEnabled = process.env.ADMIN_GUI_ENABLED === 'true';
     
     if (adminGuiEnabled) {
@@ -135,16 +139,17 @@ let dbInitialized = false;
         
         if (!adminCredentials) {
           logger.warn(
-            '⚠️  Admin GUI running without authentication! ' +
-            'Set ADMIN_GUI_USERNAME and ADMIN_GUI_PASSWORD for production.'
+            '⚠️  MongoDB connection info displayed. ' +
+            'Use MongoDB Compass or Atlas UI for database management.'
           );
         }
       } catch (err: any) {
-        logger.error(`Failed to start Admin GUI: ${err.message}`);
-        logger.warn('Continuing without Admin GUI...');
+        logger.error(`Failed to display MongoDB info: ${err.message}`);
+        logger.warn('Continuing without admin GUI info...');
       }
     } else {
-      logger.info('Admin GUI disabled (set ADMIN_GUI_ENABLED=true to enable)');
+      logger.info('Admin GUI info disabled (set ADMIN_GUI_ENABLED=true to enable)');
+      logger.info('Use MongoDB Compass or Atlas UI to manage the database');
     }
   } catch (err: any) {
     logger.error(`Failed to initialize database: ${err.message}`);
@@ -182,21 +187,31 @@ app.use((req: Request, res: Response, next: Function) => {
 // ————————————————————————————————
 app.use('/health', healthRouter);
 app.use('/auth', authRouter);
-app.use('/api/trial', trialRouter);
-app.use('/api/x402', x402Router);
+
+
+// ————————————————————————————————
+// ADMIN ROUTES
+// ————————————————————————————————
+app.use('/admin/auth', adminAuthRouter);  // Admin login (no auth required)
+
+// Protected admin routes (require admin JWT)
+app.use('/admin/health', adminLimiter, verifyAdminToken, healthRouter);
+app.use('/admin/alerts', adminLimiter, verifyAdminToken, alertsRouter);
 
 // ————————————————————————————————
 // PROTECTED ROUTES (Require JWT)
 // ————————————————————————————————
 app.use('/setup', verifyToken, setupRouter);
 app.use('/export', verifyToken, exportRouter);
+app.use('/api/trial', verifyToken, trialRouter);
+app.use('/api/x402', verifyToken, x402Router);
+app.use('/api/subscribe', verifyToken, subscriptionRouter);
 
 // ————————————————————————————————
 // PROTECTED ROUTES (Require JWT + Trial Check)
 // ————————————————————————————————
 app.use('/api/analytics', verifyToken, enforceTrialLimits, analyticsRouter);
 app.use('/api/alerts', verifyToken, enforceTrialLimits, alertsRouter);
-app.use('/stats', verifyToken, enforceTrialLimits, analyticsRouter);
 
 // ————————————————————————————————
 // SWAGGER UI — POLKADOT CLOUD THEMED
@@ -270,6 +285,15 @@ app.get('/console', (_, res) => {
     res.sendFile(indexPath);
   } else {
     res.status(404).send('Index page not found');
+  }
+});
+
+app.get('/admin', (_, res) => {
+  const adminPath = path.join(process.cwd(), 'public', 'admin.html');
+  if (require('fs').existsSync(adminPath)) {
+    res.sendFile(adminPath);
+  } else {
+    res.status(404).send('Admin console not found');
   }
 });
 

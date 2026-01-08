@@ -1,20 +1,130 @@
 [
   {
-    "name": "westend",
+    "name": "polkadot",
     "endpoints": [
-      "wss://westend-rpc.polkadot.io",
-      "wss://westend-rpc.dwellir.com"
+      "wss://polkadot-rpc.polkadot.io",
+      "wss://polkadot-rpc.dwellir.com",
+      "wss://polkadot.api.onfinality.io/public-ws"
     ],
-    "tokenSymbol": "WND",
+    "tokenSymbol": "DOT",
     "adapterType": "substrate"
   },
   {
-    "name": "asset-hub-westend",
+    "name": "kusama",
     "endpoints": [
-      "wss://westend-asset-hub-rpc.polkadot.io",
-      "wss://asset-hub-westend-rpc.dwellir.com"
+      "wss://kusama-rpc.polkadot.io",
+      "wss://kusama-rpc.dwellir.com",
+      "wss://kusama.api.onfinality.io/public-ws"
     ],
-    "tokenSymbol": "WND",
+    "tokenSymbol": "KSM",
     "adapterType": "substrate"
+  },
+  {
+    "name": "asset-hub-polkadot",
+    "endpoints": [
+      "wss://polkadot-asset-hub-rpc.polkadot.io",
+      "wss://asset-hub-polkadot-rpc.dwellir.com"
+    ],
+    "tokenSymbol": "DOT",
+    "adapterType": "substrate"
+  },
+  {
+    "name": "asset-hub-kusama",
+    "endpoints": [
+      "wss://kusama-asset-hub-rpc.polkadot.io",
+      "wss://asset-hub-kusama-rpc.dwellir.com"
+    ],
+    "tokenSymbol": "KSM",
+    "adapterType": "substrate"
+  },
+  {
+    "name": "ethereum",
+    "endpoints": [
+      "wss://ethereum-rpc.publicnode.com",
+      "https://eth.drpc.org"
+    ],
+    "tokenSymbol": "ETH",
+    "adapterType": "evm"
+  },
+  {
+    "name": "polygon",
+    "endpoints": [
+      "https://polygon-rpc.com",
+      "wss://polygon-bor-rpc.publicnode.com"
+    ],
+    "tokenSymbol": "POL",
+    "adapterType": "evm"
+  },
+  {
+    "name": "base",
+    "endpoints": [
+      "https://mainnet.base.org",
+      "wss://base-rpc.publicnode.com"
+    ],
+    "tokenSymbol": "ETH",
+    "adapterType": "evm"
+  },
+  {
+    "name": "arbitrum",
+    "endpoints": [
+      "https://arb1.arbitrum.io/rpc",
+      "wss://arbitrum-one-rpc.publicnode.com"
+    ],
+    "tokenSymbol": "ETH",
+    "adapterType": "evm"
+  },
+  {
+    "name": "optimism",
+    "endpoints": [
+      "https://mainnet.optimism.io",
+      "wss://optimism-rpc.publicnode.com"
+    ],
+    "tokenSymbol": "ETH",
+    "adapterType": "evm"
+  },
+  {
+    "name": "near",
+    "endpoints": [
+      "https://rpc.mainnet.near.org",
+      "https://near.drpc.org"
+    ],
+    "tokenSymbol": "NEAR",
+    "adapterType": "custom"
+  },
+  {
+    "name": "solana",
+    "endpoints": [
+      "https://api.mainnet-beta.solana.com",
+      "https://solana-mainnet.rpc.extrnode.com"
+    ],
+    "tokenSymbol": "SOL",
+    "adapterType": "solana"
+  },
+  {
+    "name": "sui",
+    "endpoints": [
+      "https://fullnode.mainnet.sui.io:443",
+      "https://sui-rpc.publicnode.com"
+    ],
+    "tokenSymbol": "SUI",
+    "adapterType": "custom"
+  },
+  {
+    "name": "cosmos-hub",
+    "endpoints": [
+      "https://cosmos-rpc.polkachu.com",
+      "wss://cosmos-rpc.publicnode.com"
+    ],
+    "tokenSymbol": "ATOM",
+    "adapterType": "cosmos",
+    "hrp": "cosmos"
+  },
+  {
+    "name": "bitcoin",
+    "endpoints": [
+      "https://go.getblock.io"
+    ],
+    "tokenSymbol": "BTC",
+    "adapterType": "bitcoin"
   }
 ]

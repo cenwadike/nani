@@ -11,6 +11,7 @@
 
 import logger from './logger';
 import { ChainEvent } from '../types/adapterTypes';
+import { TenantConfig } from './storage';
 
 // ============================================================================
 // SAFE FILTER TYPES - Declarative only, no code execution
@@ -211,8 +212,8 @@ function extractField(
   field: string,
   event: ChainEvent,
   chainType: string,
-  context: { address: string }
-): any {
+  context: { address?: string }
+): any {      
   // Special context fields
   if (field === 'user.address') return context.address;
   if (field === 'chainType') return chainType;
@@ -426,17 +427,35 @@ export function validateFilter(expression: FilterExpression): { valid: boolean; 
 export async function applyFilters(
   event: ChainEvent,
   chainId: string,
-  address: string,
-  filters: FilterConfig[]
+  tenantConfig: TenantConfig
 ): Promise<boolean> {
+  const { addresses = [], monitoringMode = 'personal', filters = [] } = tenantConfig;
   const chainType = getChainType(chainId);
-  const context = { address };
 
+  // Context: use first address for {{user.address}}
+  const context = addresses.length > 0 ? { address: addresses[0] } : { address: ''};
+
+  // Auto address matching in personal mode
+  if (monitoringMode === 'personal' && addresses.length > 0) {
+    const from = extractFrom(event, chainType);
+    const to = extractTo(event, chainType);
+
+    if (from !== null || to !== null) {
+      const involvesUser = 
+        (from && addresses.includes(from)) ||
+        (to && addresses.includes(to));
+
+      if (!involvesUser) {
+        logger.info(`[FILTER] Event skipped: does not involve any monitored address`);
+        return false;
+      }
+    }
+  }
+
+  // User-defined filters
   for (const filter of filters) {
     if (!filter.enabled) continue;
-
     const passed = await evaluateFilter(filter.expression, event, chainType, context);
-
     if (!passed) {
       logger.info(`[FILTER] Event rejected by filter: ${filter.name}`);
       return false;

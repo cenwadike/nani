@@ -35,6 +35,7 @@ export async function convertTrialToPaid(
     stripeSubscriptionId: subscription.id,
     tier: trialConfig.tier,
     status: 'active',
+    createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     address: '',
     chainId: 'billing',

@@ -46,58 +46,39 @@
  * @features
  *   • Full batch processing with per-chain success/failure reporting
  *   • Real-time plugin validation via registry + `validateConfig()`
- *   • Automatic address normalization (any prefix → Polkadot prefix 0)
+ *   • Automatic address detection and validation
  *   • Encrypted per-chain config storage
- *   • OpenAPI 3.0 with rich examples (single + multi-chain)
- *   • Sub-150ms response even with 50 chains
- *   • Railway / Fly.io / Kubernetes ready
- *   • Deployed across 200+ production tenants
  */
-// SPDX-License-Identifier: MIT
-// routes/setup.ts – Updated with Safe Filter Engine Support (v2)
+// routes/setup.ts – Updated with full multi-chain address validation
 
 import { Router, Request, Response } from 'express';
-import { saveChainConfig, TenantConfig } from '../utils/storage';
+import { MonitoringMode, saveChainConfig, TenantConfig } from '../utils/storage';
 import { ensurePluginsLoaded, getPlugin } from '../utils/pluginRegistry';
-import { isValidPolkadotAddress } from '../utils/validateAddress';
+import { validateAddress } from '../utils/validateAddress'; // ← NEW: generalized validator
 import { NotificationPlugin } from '../types/pluginTypes';
 import { CHAINS } from '../config';
 import logger from '../utils/logger';
 import { validateFilter, FilterConfig } from '../utils/filterEngine';
+import tenantCache from '../utils/tenantCache';
 
 ensurePluginsLoaded();
 
 const router = Router();
 
-// ——————————————————————————————————————
-// EXTENDED TYPES – Now with Safe Filters
-// ——————————————————————————————————————
-interface ChainSetup {
-  chainId: string;
-  address: string;
-  plugins: {
-    activities: string[];
-    notifications: { type: string; config: any }[];
-  };
-  filters?: FilterConfig[];
-}
-
 interface SetupResult {
   chainId: string;
   success: boolean;
   data?: {
-    address: string;
+    addresses: string[];
+    monitoringMode: MonitoringMode;
     tokenSymbol: string;
     activities: string[];
     notificationsCount: number;
-    filtersCount?: number; // ← NEW
+    filtersCount?: number;
   };
   error?: string;
 }
 
-// ——————————————————————————————————————
-// POST /setup – Now with Declarative Safe Filters
-// ——————————————————————————————————————
 router.post('/', async (req: Request, res: Response) => {
   const tenantId = (req as any).tenantId;
   const { setups } = req.body;
@@ -127,21 +108,56 @@ router.post('/', async (req: Request, res: Response) => {
         throw new Error(`Invalid chainId. Valid: [${CHAINS.map(c => c.name).join(', ')}]`);
       }
 
-      // 2. Address validation & normalization
-      if (!setup.address || typeof setup.address !== 'string') {
-        throw new Error('address is required');
-      }
-      const { isValid, normalizedAddress } = isValidPolkadotAddress(setup.address.trim(), chain.name);
-      if (!isValid || !normalizedAddress) {
-        throw new Error('Invalid or unsupported address for this chain');
+      // 2. Monitoring mode
+      const monitoringMode: MonitoringMode =
+        setup.monitoringMode === 'global' ? 'global' : 'personal';
+
+      if (!['personal', 'global'].includes(monitoringMode)) {
+        throw new Error('monitoringMode must be "personal" or "global"');
       }
 
-      // 3. Plugins root
+      // 3. Address handling based on mode
+      let normalizedAddresses: string[] | undefined = undefined;
+
+      if (monitoringMode === 'personal') {
+        if (!Array.isArray(setup.addresses) || setup.addresses.length === 0) {
+          throw new Error('At least one address required in personal monitoring mode');
+        }
+
+        normalizedAddresses = [];
+        for (const rawAddr of setup.addresses) {
+          if (typeof rawAddr !== 'string' || !rawAddr.trim()) {
+            throw new Error('All addresses must be non-empty strings');
+          }
+
+          // Use generalized multi-chain validator
+          const validation = validateAddress(
+            rawAddr.trim(),
+            chain.name,
+            chain.adapterType,
+            chain.adapterType.toLowerCase() === 'cosmos' ? { hrp: chain.hrp } : undefined
+          );
+
+          if (!validation.isValid || !validation.normalizedAddress) {
+            throw new Error(`Invalid address for chain ${chain.name} (${chain.adapterType}): ${rawAddr}`);
+          }
+
+          normalizedAddresses.push(validation.normalizedAddress);
+        }
+
+        // Deduplicate
+        normalizedAddresses = [...new Set(normalizedAddresses)];
+
+      } else { // global mode
+        if (setup.addresses && Array.isArray(setup.addresses) && setup.addresses.length > 0) {
+          logger.warn(`${prefix} → addresses provided in global mode – will be ignored`);
+        }
+      }
+
+      // 4. Plugins validation
       if (!setup.plugins || typeof setup.plugins !== 'object') {
         throw new Error('plugins object is required');
       }
-
-      // 4. Activity plugins
       if (!Array.isArray(setup.plugins.activities) || setup.plugins.activities.length === 0) {
         throw new Error('At least one activity plugin required');
       }
@@ -153,7 +169,6 @@ router.post('/', async (req: Request, res: Response) => {
         }
       }
 
-      // 5. Notification plugins
       if (!Array.isArray(setup.plugins.notifications)) {
         throw new Error('notifications must be array (can be empty)');
       }
@@ -165,84 +180,66 @@ router.post('/', async (req: Request, res: Response) => {
           throw new Error(`Config object required for notification ${notif.type}`);
         }
         const plugin = getPlugin('notifications', notif.type) as NotificationPlugin;
-        if (!plugin) {
-          throw new Error(`Unknown notification plugin: ${notif.type}`);
-        }
+        if (!plugin) throw new Error(`Unknown notification plugin: ${notif.type}`);
         if (!plugin.validateConfig(notif.config)) {
           throw new Error(`Invalid config for ${notif.type} – failed validateConfig()`);
         }
       }
 
-      // ————————————————————————
-      // 6. NEW: Safe Filters Validation
-      // ————————————————————————
+      // 5. Filters validation
       let validatedFilters: FilterConfig[] = [];
-
       if (setup.filters) {
-        if (!Array.isArray(setup.filters)) {
-          throw new Error('filters must be an array');
-        }
-
-        if (setup.filters.length === 0) {
-          logger.info(`${prefix} → Empty filters array provided (ignored)`);
-        } else {
+        if (!Array.isArray(setup.filters)) throw new Error('filters must be an array');
+        if (setup.filters.length > 0) {
           for (const [fIdx, filter] of setup.filters.entries()) {
-            if (!filter || typeof filter !== 'object') {
-              throw new Error(`Filter #${fIdx} must be an object`);
-            }
-            if (!filter.name || typeof filter.name !== 'string') {
-              throw new Error(`Filter #${fIdx} missing valid 'name'`);
-            }
-            if (typeof filter.enabled !== 'boolean') {
-              filter.enabled = true; // default
-            }
+            if (!filter || typeof filter !== 'object') throw new Error(`Filter #${fIdx} must be an object`);
+            if (!filter.name || typeof filter.name !== 'string') throw new Error(`Filter #${fIdx} missing valid 'name'`);
+            if (typeof filter.enabled !== 'boolean') filter.enabled = true;
             if (!filter.expression || typeof filter.expression !== 'object') {
               throw new Error(`Filter "${filter.name}" missing 'expression'`);
             }
-
             const validation = validateFilter(filter.expression);
-            if (!validation.valid) {
-              throw new Error(`Filter "${filter.name}" invalid: ${validation.error}`);
-            }
+            if (!validation.valid) throw new Error(`Filter "${filter.name}" invalid: ${validation.error}`);
           }
-
-            validatedFilters = setup.filters.map((f: FilterConfig): FilterConfig => ({
+          validatedFilters = setup.filters.map((f: any) => ({
             name: f.name.trim(),
             description: f.description?.trim(),
             enabled: !!f.enabled,
             expression: f.expression,
-            }));
-
+          }));
           logger.info(`${prefix} → ${validatedFilters.length} safe filter(s) validated`);
         }
       }
 
-      // ————————————————————————
-      // SUCCESS: Save Config with Filters
-      // ————————————————————————
+      // 6. Save config
       const configData: TenantConfig = {
-        address: normalizedAddress,
+        addresses: normalizedAddresses,
+        monitoringMode,
         chainId: chain.name,
         tokenSymbol: chain.tokenSymbol,
         plugins: {
           activities: setup.plugins.activities.map((a: string) => a.trim()),
           notifications: setup.plugins.notifications,
         },
-        filters: validatedFilters, // ← NEW: Saved securely
+        filters: validatedFilters,
         updatedAt: new Date().toISOString(),
       };
 
       await saveChainConfig(tenantId, chain.name, configData);
+      await tenantCache.refreshTenantChain(tenantId, chain.name);
 
-      logger.event(`${prefix} → Config saved | ${normalizedAddress} | ${setup.plugins.activities.join(', ')} | ${validatedFilters.length} filter(s)`);
+      logger.event(
+        `${prefix} → Config saved | mode: ${monitoringMode} | addresses: ${normalizedAddresses?.length || 0} | filters: ${validatedFilters.length}`
+      );
 
       result.success = true;
       result.data = {
-        address: normalizedAddress,
+        addresses: normalizedAddresses || [],
+        monitoringMode,
         tokenSymbol: chain.tokenSymbol,
         activities: setup.plugins.activities.map((a: string) => a.trim()),
         notificationsCount: setup.plugins.notifications.length,
-        filtersCount: validatedFilters.length, // ← NEW
+        filtersCount: validatedFilters.length,
       };
     } catch (err: any) {
       const msg = err.message || 'Unknown validation error';
@@ -253,9 +250,7 @@ router.post('/', async (req: Request, res: Response) => {
     results.push(result);
   }
 
-  // ————————————————————————
-  // Final Response
-  // ————————————————————————
+  // Final response
   const failed = results.filter(r => !r.success);
   if (failed.length > 0) {
     return res.status(400).json({

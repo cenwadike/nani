@@ -2,7 +2,7 @@
 // adapters/near.ts
 
 import { connect, ConnectConfig, keyStores, Near } from 'near-api-js';
-import { JsonRpcProvider, Provider } from 'near-api-js/lib/providers';
+import { Provider } from 'near-api-js/lib/providers';
 import {
   ChainAdapter,
   ChainAdapterConfig,

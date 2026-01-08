@@ -18,6 +18,7 @@ export interface BillingConfig {
   stripeSubscriptionId: string;
   tier: string;
   status: 'active' | 'cancelled' | 'past_due';
+  createdAt: string;
   updatedAt: string;
   address: string;
   chainId: string;

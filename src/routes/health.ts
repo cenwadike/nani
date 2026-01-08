@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// This file is part of the Nani project, a Polkadot-based event monitoring and notifications service.
+// This file is part of the Nani Plus, an event monitoring, notifications and intelligence service.
 //
 // Copyright (c) 2025 Nani Contributors
 //
@@ -55,7 +55,30 @@
  *   • Deployed on 50+ nodes globally
  */
 // SPDX-License-Identifier: MIT
-// routes/health.ts - Enhanced with memory and queue monitoring
+// This file is part of the Nani Plus project.
+//
+// Copyright (c) 2025 Nani Contributors
+
+/**
+ * @file routes/health.ts
+ * @summary Secure health check endpoints with public/admin separation
+ * @description Two-tier health check system:
+ *              PUBLIC (/health) - Lean, minimal system status
+ *              ADMIN (/health/*) - Detailed metrics, diagnostics, controls
+ *
+ * @security
+ *   • Public endpoint exposes ONLY: status, timestamp, basic availability
+ *   • Admin endpoints require JWT with admin role
+ *   • Sensitive metrics (memory, CPU, queue) only in admin routes
+ *   • No chain details in public response
+ *
+ * @features
+ *   • Kubernetes-compatible liveness/readiness probes
+ *   • Minimal attack surface on public endpoint
+ *   • Comprehensive diagnostics for admin
+ *   • Manual GC trigger (admin only)
+ *   • Adapter health matrix (admin only)
+ */
 
 import os from 'os';
 import fs from 'fs';
@@ -67,34 +90,95 @@ import { Router, Request, Response } from 'express';
 import { promises as fsPromises } from 'fs';
 import adapterPool from '../utils/adapterPool';
 import eventQueue from '../utils/eventQueue';
+import { verifyAdminToken } from '../middlewares/admin.auth';
 
 const router = Router();
 
 // ——————————————————————————————————————
-// GET /health - Main Health Check
+// PUBLIC: GET /health - Minimal Health Check
 // ——————————————————————————————————————
+/**
+ * @route GET /health
+ * @access Public
+ * @description Ultra-lean health check for load balancers and monitoring.
+ *              Returns ONLY operational status without exposing internals.
+ */
 router.get('/', async (req: Request, res: Response) => {
-  const start = Date.now();
+  try {
+    // Check if critical systems are operational
+    const adaptersHealthy = adapterPool.getStats().healthy > 0;
+    const queueHealthy = eventQueue.getHealth().healthy;
+    
+    const isHealthy = adaptersHealthy && queueHealthy;
+    
+    if (!isHealthy) {
+      return res.status(503).json({
+        status: 'degraded',
+        timestamp: new Date().toISOString(),
+      });
+    }
 
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+    });
+  } catch (err: any) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// ——————————————————————————————————————
+// PUBLIC: GET /health/live - Kubernetes Liveness
+// ——————————————————————————————————————
+router.get('/live', (req: Request, res: Response) => {
+  res.status(200).json({ 
+    status: 'alive', 
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ——————————————————————————————————————
+// PUBLIC: GET /health/ready - Kubernetes Readiness
+// ——————————————————————————————————————
+router.get('/ready', async (req: Request, res: Response) => {
+  try {
+    const adapterStats = adapterPool.getStats();
+    const queueHealth = eventQueue.getHealth();
+
+    const ready = adapterStats.healthy > 0 && queueHealth.healthy;
+
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ready' : 'not ready',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    res.status(503).json({ 
+      status: 'error',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// ADMIN-ONLY ROUTES BELOW - Require Admin JWT
+// ════════════════════════════════════════════════════════════════════════
+
+// ——————————————————————————————————————
+// ADMIN: GET /health/detailed
+// ——————————————————————————————————————
+router.get('/detailed', verifyAdminToken, async (req: Request, res: Response) => {
   try {
     const timestamp = new Date().toISOString();
 
     // Adapter Pool Health Matrix
-    const adapterStats = adapterPool.getStats();
     const status: Record<string, string> = {};
-
     for (const chain of CHAINS) {
-      const isHealthy = adapterPool.isHealthy(chain.name);
+      const isHealthy = await adapterPool.isHealthy(chain.name);
       status[chain.name] = isHealthy ? 'connected' : 'disconnected';
-    }
-
-    // Fail fast if any chain is unhealthy
-    const allHealthy = Object.values(status).every(s => s === 'connected');
-    if (!allHealthy) {
-      throw new Error(`Chain adapter(s) unhealthy: ${Object.entries(status)
-        .filter(([_, s]) => s === 'disconnected')
-        .map(([c]) => c)
-        .join(', ')}`);
     }
 
     // Real-time 24h Stats from Encrypted Logs
@@ -128,7 +212,11 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     // System Resource Metrics
-    const memoryUsageMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    const memory = process.memoryUsage();
+    const memoryUsageMB = Math.round(memory.rss / 1024 / 1024);
+    const heapUsedMB = Math.round(memory.heapUsed / 1024 / 1024);
+    const heapTotalMB = Math.round(memory.heapTotal / 1024 / 1024);
+    const heapUsagePercent = ((memory.heapUsed / memory.heapTotal) * 100).toFixed(2);
     const cpuPercent = Math.round((os.loadavg()[0] / os.cpus().length) * 1000) / 10;
 
     // Uptime in hours
@@ -145,11 +233,10 @@ router.get('/', async (req: Request, res: Response) => {
         }
       : undefined;
 
-    // NEW: Add queue stats
+    // Queue stats
     const queueStats = eventQueue.getStats();
     const queueHealth = eventQueue.getHealth();
 
-    // Success response with enhanced stats
     const response = {
       status: 'ok',
       timestamp,
@@ -170,75 +257,43 @@ router.get('/', async (req: Request, res: Response) => {
         utilizationPercent: Math.round(queueHealth.utilization * 100),
         healthy: queueHealth.healthy,
       },
+      memory: {
+        heapUsed: `${heapUsedMB}MB`,
+        heapTotal: `${heapTotalMB}MB`,
+        heapUsagePercent: `${heapUsagePercent}%`,
+        rss: `${memoryUsageMB}MB`,
+        external: `${Math.round(memory.external / 1024 / 1024)}MB`,
+      },
       system: {
         memoryUsageMB,
         cpuPercent,
-        heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        heapUsedMB,
+        heapTotalMB,
+        platform: process.platform,
+        arch: process.arch,
+        nodeVersion: process.version,
+        cpus: os.cpus().length,
+        loadAverage: os.loadavg().map(l => l.toFixed(2)),
       },
       cluster: clusterInfo,
     };
 
-    logger.event(`Health check OK → ${Date.now() - start}ms`);
+    logger.event(`Admin health check by ${req.adminEmail}`);
     res.json(response);
   } catch (err: any) {
-    logger.error(`Health check FAILED: ${err.message}`);
-    logger.error(`Stack: ${err.stack}`);
-
+    logger.error(`Admin health check failed: ${err.message}`);
     res.status(503).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      error: 'Health check failed',
-      details: err.message,
+      error: err.message,
     });
   }
 });
 
 // ——————————————————————————————————————
-// GET /health/live - Kubernetes Liveness Probe
+// ADMIN: GET /health/memory
 // ——————————————————————————————————————
-router.get('/live', (req: Request, res: Response) => {
-  res.status(200).json({ 
-    status: 'alive', 
-    timestamp: new Date().toISOString(),
-    pid: process.pid,
-  });
-});
-
-// ——————————————————————————————————————
-// GET /health/ready - Kubernetes Readiness Probe
-// ——————————————————————————————————————
-router.get('/ready', async (req: Request, res: Response) => {
-  try {
-    const adapterStats = adapterPool.getStats();
-    const queueHealth = eventQueue.getHealth();
-
-    const ready = adapterStats.healthy > 0 && queueHealth.healthy;
-
-    if (ready) {
-      res.status(200).json({
-        status: 'ready',
-        adapters: `${adapterStats.healthy}/${adapterStats.total}`,
-        queueHealthy: queueHealth.healthy,
-        queueUtilization: `${Math.round(queueHealth.utilization * 100)}%`,
-      });
-    } else {
-      res.status(503).json({
-        status: 'not ready',
-        reason: !queueHealth.healthy ? queueHealth.reason : 'No healthy adapters',
-        adapters: `${adapterStats.healthy}/${adapterStats.total}`,
-        queueUtilization: `${Math.round(queueHealth.utilization * 100)}%`,
-      });
-    }
-  } catch (err: any) {
-    res.status(503).json({ status: 'error', error: err.message });
-  }
-});
-
-// ——————————————————————————————————————
-// GET /health/memory - Memory Metrics Only
-// ——————————————————————————————————————
-router.get('/memory', (req: Request, res: Response) => {
+router.get('/memory', verifyAdminToken, (req: Request, res: Response) => {
   const memory = process.memoryUsage();
   const heapUsedMB = Math.round(memory.heapUsed / 1024 / 1024);
   const heapTotalMB = Math.round(memory.heapTotal / 1024 / 1024);
@@ -260,9 +315,9 @@ router.get('/memory', (req: Request, res: Response) => {
 });
 
 // ——————————————————————————————————————
-// GET /health/queue - Queue Metrics Only
+// ADMIN: GET /health/queue
 // ——————————————————————————————————————
-router.get('/queue', (req: Request, res: Response) => {
+router.get('/queue', verifyAdminToken, (req: Request, res: Response) => {
   const stats = eventQueue.getStats();
   const health = eventQueue.getHealth();
   
@@ -287,9 +342,9 @@ router.get('/queue', (req: Request, res: Response) => {
 });
 
 // ——————————————————————————————————————
-// GET /health/adapters - Adapter Pool Status
+// ADMIN: GET /health/adapters
 // ——————————————————————————————————————
-router.get('/adapters', (req: Request, res: Response) => {
+router.get('/adapters', verifyAdminToken, (req: Request, res: Response) => {
   const stats = adapterPool.getStats();
   
   res.status(stats.healthy > 0 ? 200 : 503).json({
@@ -308,9 +363,9 @@ router.get('/adapters', (req: Request, res: Response) => {
 });
 
 // ——————————————————————————————————————
-// POST /health/gc - Manual Garbage Collection
+// ADMIN: POST /health/gc
 // ——————————————————————————————————————
-router.post('/gc', (req: Request, res: Response) => {
+router.post('/gc', verifyAdminToken, (req: Request, res: Response) => {
   if (!global.gc) {
     return res.status(503).json({
       error: 'Garbage collection not exposed',
@@ -322,14 +377,13 @@ router.post('/gc', (req: Request, res: Response) => {
   const before = process.memoryUsage();
   const beforeHeapMB = Math.round(before.heapUsed / 1024 / 1024);
   
-  // Trigger GC
   global.gc();
   
   const after = process.memoryUsage();
   const afterHeapMB = Math.round(after.heapUsed / 1024 / 1024);
   const freedMB = beforeHeapMB - afterHeapMB;
   
-  logger.info(`Manual GC triggered: freed ${freedMB}MB`);
+  logger.event(`Manual GC triggered by admin ${req.adminEmail}: freed ${freedMB}MB`);
   
   res.json({
     message: 'Garbage collection completed',
@@ -337,111 +391,12 @@ router.post('/gc', (req: Request, res: Response) => {
     before: {
       heapUsed: `${beforeHeapMB}MB`,
       heapTotal: `${Math.round(before.heapTotal / 1024 / 1024)}MB`,
-      external: `${Math.round(before.external / 1024 / 1024)}MB`,
     },
     after: {
       heapUsed: `${afterHeapMB}MB`,
       heapTotal: `${Math.round(after.heapTotal / 1024 / 1024)}MB`,
-      external: `${Math.round(after.external / 1024 / 1024)}MB`,
     },
   });
-});
-
-// ——————————————————————————————————————
-// GET /health/detailed - Comprehensive System Report
-// ——————————————————————————————————————
-router.get('/detailed', async (req: Request, res: Response) => {
-  try {
-    const memory = process.memoryUsage();
-    const adapterStats = adapterPool.getStats();
-    const queueStats = eventQueue.getStats();
-    const queueHealth = eventQueue.getHealth();
-
-    const heapUsedMB = Math.round(memory.heapUsed / 1024 / 1024);
-    const heapTotalMB = Math.round(memory.heapTotal / 1024 / 1024);
-    const heapUsagePercent = ((memory.heapUsed / memory.heapTotal) * 100).toFixed(2);
-
-    const memoryHealthy = parseFloat(heapUsagePercent) < 90;
-    const adaptersHealthy = adapterStats.healthy > 0;
-    const overallHealthy = memoryHealthy && adaptersHealthy && queueHealth.healthy;
-
-    const warnings: string[] = [];
-    if (parseFloat(heapUsagePercent) > 80) {
-      warnings.push(`High memory usage: ${heapUsagePercent}%`);
-    }
-    if (queueHealth.utilization > 0.8) {
-      warnings.push(`Queue utilization high: ${Math.round(queueHealth.utilization * 100)}%`);
-    }
-    if (adapterStats.unhealthy > 0) {
-      warnings.push(`${adapterStats.unhealthy} adapter(s) unhealthy`);
-    }
-    if (queueStats.dropped > 0) {
-      warnings.push(`${queueStats.dropped} events dropped`);
-    }
-
-    const response = {
-      status: overallHealthy ? 'healthy' : 'degraded',
-      timestamp: new Date().toISOString(),
-      uptime: `${Math.round(process.uptime() / 36) / 100}h`,
-      pid: process.pid,
-      
-      memory: {
-        heapUsed: `${heapUsedMB}MB`,
-        heapTotal: `${heapTotalMB}MB`,
-        heapUsagePercent: `${heapUsagePercent}%`,
-        external: `${Math.round(memory.external / 1024 / 1024)}MB`,
-        rss: `${Math.round(memory.rss / 1024 / 1024)}MB`,
-        arrayBuffers: `${Math.round(memory.arrayBuffers / 1024 / 1024)}MB`,
-        healthy: memoryHealthy,
-      },
-      
-      queue: {
-        size: queueStats.size,
-        processed: queueStats.processed,
-        dropped: queueStats.dropped,
-        deduplicated: queueStats.deduplicated,
-        peakSize: queueStats.peakSize,
-        avgProcessingTime: `${Math.round(queueStats.averageProcessingTime)}ms`,
-        utilization: `${Math.round(queueHealth.utilization * 100)}%`,
-        healthy: queueHealth.healthy,
-        reason: queueHealth.reason || null,
-      },
-      
-      adapters: {
-        total: adapterStats.total,
-        healthy: adapterStats.healthy,
-        unhealthy: adapterStats.unhealthy,
-        chains: adapterStats.chains.map(c => ({
-          name: c.name,
-          healthy: c.healthy,
-          lastCheck: c.lastCheck,
-          reconnectAttempts: c.reconnectAttempts,
-        })),
-      },
-      
-      system: {
-        platform: process.platform,
-        arch: process.arch,
-        nodeVersion: process.version,
-        cpus: os.cpus().length,
-        loadAverage: os.loadavg().map(l => l.toFixed(2)),
-        totalMemory: `${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`,
-        freeMemory: `${Math.round(os.freemem() / 1024 / 1024 / 1024)}GB`,
-      },
-      
-      warnings: warnings.length > 0 ? warnings : null,
-    };
-
-    const statusCode = overallHealthy ? 200 : 503;
-    res.status(statusCode).json(response);
-    
-  } catch (err: any) {
-    res.status(500).json({
-      status: 'error',
-      error: err.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
 });
 
 export default router;

@@ -141,6 +141,7 @@ export interface ChainAdapterConfig {
   timeout?: number;
   customSettings?: Record<string, any>;
   assignedWorkerId?: number;
+  hrp?: string; // For Cosmos chains
 }
 
 export interface ChainQuery {

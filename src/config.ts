@@ -86,6 +86,7 @@ try {
         adapterType: c.adapterType || detectAdapterType(c.name, c.endpoints),
         chainType: c.chainType || c.name,
         customSettings: c.customSettings || {},
+        hrp: c.hrp || undefined,
       }));
       logger.info(`Loaded ${CHAINS.length} chains from chains.json`);
     }
@@ -202,11 +203,14 @@ CHAINS.forEach(chain => {
 const config = {
   port: int(process.env.PORT, 3000),
   jwtSecret: str(process.env.JWT_SECRET, 'dev-secret-change-me'),
+  adminJwtSecret: str(process.env.ADMIN_JWT_SECRET, 'admin-dev-secret-change-me'),
   encryptionKey: Buffer.from(
     str(process.env.ENCRYPTION_KEY, 'default-32-char-key-change-me!'),
     'utf8'
   ).toString('base64'),
-  
+  adminIpWhitelist: str(process.env.ADMIN_IP_WHITELIST, '').split(',').map(s => s.trim()).filter(Boolean),
+  mongoDbUrl: str(process.env.MONGODB_URI, ''),
+  mongoDbName: str(process.env.MONGODB_DB_NAME, 'nani_database'),
   // ——————————————————————————————————————
   // EVENT QUEUE CONFIGURATION (NEW)
   // ——————————————————————————————————————
@@ -232,6 +236,8 @@ const config = {
     // Lower = faster but more CPU intensive
     processingDelay: int(process.env.QUEUE_PROCESSING_DELAY, 100),
   },
+  
+  hfToken: str(process.env.HF_TOKEN, ''),
   
   twilio: {
     sid: str(process.env.TWILIO_SID, ''),

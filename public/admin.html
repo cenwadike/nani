@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nani Plus - Admin Console</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --red: #dc2626;
+            --primary: #E6007A;
+            --secondary: #552BBF;
+            --blue: #3b82f6;
+            --dark: #0f172a;
+            --darker: #1e293b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        body.logged-out {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        }
+        header {
+            background: linear-gradient(135deg, #dc2626 0%, #552BBF 100%);
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        body.logged-out header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        }
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: white;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #dc2626;
+            font-size: 18px;
+        }
+        body.logged-out .logo-icon {
+            color: #3b82f6;
+        }
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: white;
+        }
+        .logo-admin {
+            background: white;
+            color: #dc2626;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-left: 8px;
+        }
+        body.logged-out .logo-admin {
+            color: #3b82f6;
+        }
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2rem;
+            font-size: 0.875rem;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 0.5rem;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+        }
+        .btn-primary {
+            background: white;
+            color: #dc2626;
+        }
+        body.logged-out .btn-primary {
+            color: #3b82f6;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.3);
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        .btn-small {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            text-align: center;
+            padding: 2rem;
+        }
+        .welcome-screen h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, #e2e8f0 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .welcome-screen p {
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 2rem;
+            max-width: 600px;
+        }
+        nav {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 73px;
+            z-index: 99;
+            display: none;
+        }
+        nav.show { display: block; }
+        .nav-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            gap: 0;
+            overflow-x: auto;
+        }
+        .nav-item {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+        .nav-item.active {
+            color: white;
+            border-bottom-color: #dc2626;
+        }
+        .nav-badge {
+            background: #dc2626;
+            color: white;
+            padding: 0.125rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+        }
+        main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .kpi-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+        }
+        .kpi-card.healthy::before { background: #10b981; }
+        .kpi-card.warning::before { background: #f59e0b; }
+        .kpi-card.critical::before { background: #dc2626; }
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(220, 38, 38, 0.2);
+        }
+        .kpi-content { flex: 1; }
+        .kpi-title {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .kpi-value {
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .kpi-value.critical { color: #dc2626; }
+        .kpi-value.warning { color: #f59e0b; }
+        .kpi-subtitle {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        .kpi-icon {
+            font-size: 1.5rem;
+            opacity: 0.6;
+        }
+        .kpi-trend {
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .kpi-trend.positive { color: #10b981; }
+        .kpi-trend.negative { color: #ef4444; }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        .card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #E6007A;
+        }
+        .card-description {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-top: 0.25rem;
+        }
+        .card-content {
+            padding: 1.5rem;
+        }
+        .chart-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .alert-item {
+            background: #0f172a;
+            border: 2px solid #334155;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s;
+        }
+        .alert-item:hover {
+            transform: translateX(5px);
+            border-color: #E6007A;
+        }
+        .alert-item.CRITICAL {
+            border-color: #dc2626;
+            background: rgba(220, 38, 38, 0.05);
+        }
+        .alert-item.ERROR {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.05);
+        }
+        .alert-item.WARNING {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.05);
+        }
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .alert-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .alert-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .alert-body {
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+        .alert-footer {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-critical {
+            background: rgba(220, 38, 38, 0.2);
+            color: #dc2626;
+        }
+        .badge-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .filter-select {
+            padding: 0.5rem 1rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            margin: 2rem;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #dc2626;
+        }
+        body.logged-out .modal-title {
+            color: #3b82f6;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #dc2626;
+        }
+        body.logged-out .form-input:focus {
+            border-color: #3b82f6;
+        }
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: monospace;
+        }
+        .code-block {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            margin-top: 0.5rem;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #334155;
+        }
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        .metric-label {
+            font-weight: 600;
+            color: #94a3b8;
+        }
+        .metric-value {
+            font-weight: 600;
+        }
+        .chain-item {
+            background: #0f172a;
+            border: 2px solid #334155;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chain-item.healthy {
+            border-color: #10b981;
+        }
+        .chain-item.unhealthy {
+            border-color: #ef4444;
+        }
+        .chain-info {
+            flex: 1;
+        }
+        .chain-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+        .chain-meta {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        .toast {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            z-index: 10000;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid;
+            max-width: 400px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: #10b981;
+            color: #10b981;
+        }
+        .toast.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @media (max-width: 768px) {
+            .chart-grid-2 { grid-template-columns: 1fr; }
+            main { padding: 1rem; }
+            header { padding: 1rem; }
+            .kpi-grid { grid-template-columns: 1fr; }
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="logged-out">
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">N</div>
+                <div>
+                    <span class="logo-text">Nani</span>
+                    <span class="logo-admin">ADMIN</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="status-badge" id="systemStatus">
+                    <span class="status-dot"></span>
+                    <span>System Operational</span>
+                </div>
+                <button class="btn btn-primary" onclick="showLoginModal()" id="loginBtn">Admin Login</button>
+                <button class="btn btn-secondary" onclick="logout()" id="logoutBtn" style="display: none;">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <nav id="mainNav">
+        <div class="nav-content">
+            <div class="nav-item active" onclick="switchSection('overview')">📊 Overview</div>
+            <div class="nav-item" onclick="switchSection('alerts')">
+                🚨 Alerts
+                <span class="nav-badge" id="alertsBadge">0</span>
+            </div>
+            <div class="nav-item" onclick="switchSection('system')">⚙️ System Health</div>
+            <div class="nav-item" onclick="switchSection('chains')">🌐 Chains</div>
+            <div class="nav-item" onclick="switchSection('memory')">💾 Memory</div>
+            <div class="nav-item" onclick="switchSection('queue')">📊 Queue</div>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Welcome Screen -->
+        <div id="welcome-section" class="welcome-screen">
+            <h1>Nani Plus Admin</h1>
+            <p>System administration and monitoring console. Manage alerts, monitor performance, and oversee multi-chain infrastructure.</p>
+            <button class="btn btn-primary" onclick="showLoginModal()">Admin Login</button>
+        </div>
+
+        <!-- Overview Section -->
+        <div id="overview-section" class="section">
+            <div class="kpi-grid">
+                <div class="kpi-card healthy">
+                    <div class="kpi-content">
+                        <div class="kpi-title">Active Tenants</div>
+                        <div class="kpi-value" id="activeTenants">0</div>
+                        <div class="kpi-subtitle">Currently monitoring</div>
+                        <div class="kpi-trend positive" id="tenantTrend">—</div>
+                    </div>
+                    <div class="kpi-icon">👥</div>
+                </div>
+
+                <div class="kpi-card healthy">
+                    <div class="kpi-content">
+                        <div class="kpi-title">Events (24h)</div>
+                        <div class="kpi-value" id="events24h">0</div>
+                        <div class="kpi-subtitle">Processed today</div>
+                        <div class="kpi-trend" id="eventsTrend">—</div>
+                    </div>
+                    <div class="kpi-icon">⚡</div>
+                </div>
+
+                <div class="kpi-card healthy">
+                    <div class="kpi-content">
+                        <div class="kpi-title">Notifications</div>
+                        <div class="kpi-value" id="notifications24h">0</div>
+                        <div class="kpi-subtitle">Sent in 24h</div>
+                        <div class="kpi-trend" id="notifTrend">—</div>
+                    </div>
+                    <div class="kpi-icon">🔔</div>
+                </div>
+
+                <div class="kpi-card critical">
+                    <div class="kpi-content">
+                        <div class="kpi-title">Unread Alerts</div>
+                        <div class="kpi-value critical" id="unreadAlerts">0</div>
+                        <div class="kpi-subtitle">Require attention</div>
+                        <div class="kpi-trend" style="cursor: pointer;" onclick="switchSection('alerts')">View Details →</div>
+                    </div>
+                    <div class="kpi-icon">⚠️</div>
+                </div>
+            </div>
+
+            <div class="chart-grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">System Performance</div>
+                            <div class="card-description">Real-time resource utilization</div>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Quick Actions</div>
+                            <div class="card-description">Administrative controls</div>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <button class="btn btn-primary" onclick="refreshAllData()" style="width: 100%;">🔄 Refresh All Data</button>
+                            <button class="btn btn-secondary" onclick="triggerGC()" style="width: 100%;">🗑️ Trigger Garbage Collection</button>
+                            <button class="btn btn-secondary" onclick="switchSection('system')" style="width: 100%;">📊 View System Health</button>
+                            <button class="btn btn-secondary" onclick="switchSection('chains')" style="width: 100%;">🌐 Chain Status</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div id="alerts-section" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">System Alerts</div>
+                        <div class="card-description">Critical events and notifications</div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-secondary btn-small" onclick="filterAlerts('unread')">Unread</button>
+                        <button class="btn btn-secondary btn-small" onclick="filterAlerts('all')">All</button>
+                        <button class="btn btn-primary btn-small" onclick="loadAlerts()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="filter-bar">
+                        <select class="filter-select" id="alertLevelFilter" onchange="applyAlertFilters()">
+                            <option value="">All Levels</option>
+                            <option value="CRITICAL">Critical</option>
+                            <option value="ERROR">Error</option>
+                            <option value="WARNING">Warning</option>
+                        </select>
+                    </div>
+                    <div id="alertsList">
+                        <p style="text-align: center; color: #94a3b8;">Loading alerts...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health Section -->
+        <div id="system-section" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">System Health</div>
+                        <div class="card-description">Comprehensive system diagnostics</div>
+                    </div>
+                    <button class="btn btn-primary btn-small" onclick="loadSystemHealth()">🔄 Refresh</button>
+                </div>
+                <div class="card-content" id="systemHealthContent">
+                    <p style="text-align: center; color: #94a3b8;">Loading system health...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chains Section -->
+        <div id="chains-section" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Chain Adapters</div>
+                        <div class="card-description">Multi-chain connection status</div>
+                    </div>
+                    <button class="btn btn-primary btn-small" onclick="loadChainStatus()">🔄 Refresh</button>
+                </div>
+                <div class="card-content" id="chainsContent">
+                    <p style="text-align: center; color: #94a3b8;">Loading chain status...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory Section -->
+        <div id="memory-section" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Memory Diagnostics</div>
+                        <div class="card-description">Heap and memory utilization</div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-secondary btn-small" onclick="triggerGC()">🗑️ Run GC</button>
+                        <button class="btn btn-primary btn-small" onclick="loadMemoryStats()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div class="card-content" id="memoryContent">
+                    <p style="text-align: center; color: #94a3b8;">Loading memory stats...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Queue Section -->
+        <div id="queue-section" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Event Queue</div>
+                        <div class="card-description">Queue performance and health</div>
+                    </div>
+                    <button class="btn btn-primary btn-small" onclick="loadQueueStats()">🔄 Refresh</button>
+                </div>
+                <div class="card-content" id="queueContent">
+                    <p style="text-align: center; color: #94a3b8;">Loading queue stats...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Admin Login</h2>
+                <button class="close-btn" onclick="closeLoginModal()">×</button>
+            </div>
+            <form onsubmit="login(event)">
+                <div class="form-group">
+                    <label class="form-label">Admin Email</label>
+                    <input type="email" class="form-input" id="adminEmail" required placeholder="admin@nani.dev" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="adminPassword" required placeholder="Enter admin password" autocomplete="current-password">
+                </div>
+                <div id="loginError" style="color: #ef4444; font-size: 0.875rem; margin-bottom: 1rem;"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">🔐 Admin Login</button>
+            </form>
+            <div style="margin-top: 1rem; padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 0.5rem; font-size: 0.875rem;">
+                <strong>⚠️ Admin Access Only</strong><br>
+                Default: admin@nani.dev / Set via ADMIN_PASSWORD env var
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://nani-production-c105.up.railway.app';
+        let authToken = localStorage.getItem('nani_admin_token');
+        let refreshInterval;
+        let performanceChart;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (authToken) {
+                verifyTokenAndLoad();
+            }
+        });
+
+        async function verifyTokenAndLoad() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/detailed`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (response.ok) {
+                    updateUIForLoggedIn();
+                    loadDashboard();
+                    initCharts();
+                    refreshInterval = setInterval(loadDashboard, 30000);
+                } else {
+                    localStorage.removeItem('nani_admin_token');
+                    authToken = null;
+                }
+            } catch (error) {
+                console.error('Token verification failed:', error);
+                localStorage.removeItem('nani_admin_token');
+                authToken = null;
+            }
+        }
+
+        function updateUIForLoggedIn() {
+            document.body.classList.remove('logged-out');
+            document.getElementById('mainNav').classList.add('show');
+            document.getElementById('welcome-section').style.display = 'none';
+            document.getElementById('overview-section').classList.add('active');
+            document.getElementById('loginBtn').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'block';
+        }
+
+        function switchSection(section) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            document.getElementById(`${section}-section`).classList.add('active');
+            event.target.closest('.nav-item').classList.add('active');
+
+            // Load data for specific sections
+            switch(section) {
+                case 'alerts': loadAlerts(); break;
+                case 'system': loadSystemHealth(); break;
+                case 'chains': loadChainStatus(); break;
+                case 'memory': loadMemoryStats(); break;
+                case 'queue': loadQueueStats(); break;
+            }
+        }
+
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.add('active');
+            document.getElementById('loginError').textContent = '';
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.remove('active');
+            document.getElementById('loginError').textContent = '';
+        }
+
+        async function login(e) {
+            e.preventDefault();
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.token) {
+                    authToken = data.token;
+                    localStorage.setItem('nani_admin_token', authToken);
+                    updateUIForLoggedIn();
+                    closeLoginModal();
+                    loadDashboard();
+                    initCharts();
+                    refreshInterval = setInterval(loadDashboard, 30000);
+                    showToast(`Welcome ${data.email}`, 'success');
+                } else {
+                    errorDiv.textContent = data.error || 'Login failed';
+                    if (data.attemptsRemaining !== undefined) {
+                        errorDiv.textContent += ` (${data.attemptsRemaining} attempts remaining)`;
+                    }
+                    if (data.message) {
+                        errorDiv.textContent = data.message;
+                    }
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Network error. Please try again.';
+                console.error('Login error:', error);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('nani_admin_token');
+            if (refreshInterval) clearInterval(refreshInterval);
+            window.location.reload();
+        }
+
+        async function loadDashboard() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/detailed`, { 
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Unauthorized');
+
+                const data = await response.json();
+
+                document.getElementById('activeTenants').textContent = data.stats?.activeTenants || 0;
+                document.getElementById('events24h').textContent = data.stats?.eventsProcessed24h || 0;
+                document.getElementById('notifications24h').textContent = data.stats?.notificationsSent24h || 0;
+                
+                // Update system status
+                const statusBadge = document.getElementById('systemStatus');
+                if (data.status === 'ok') {
+                    statusBadge.innerHTML = '<span class="status-dot"></span><span>System Operational</span>';
+                } else {
+                    statusBadge.innerHTML = '<span class="status-dot" style="background: #ef4444;"></span><span>System Degraded</span>';
+                }
+
+                // Load alerts count
+                loadAlertsCount();
+
+            } catch (error) {
+                console.error('Dashboard load error:', error);
+                if (error.message === 'Unauthorized') {
+                    showToast('Session expired. Please login again.', 'error');
+                    setTimeout(logout, 2000);
+                }
+            }
+        }
+
+        async function loadAlertsCount() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/alerts`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const unreadCount = data.alerts?.filter(a => !a.read).length || 0;
+                    document.getElementById('unreadAlerts').textContent = unreadCount;
+                    document.getElementById('alertsBadge').textContent = unreadCount;
+                }
+            } catch (error) {
+                console.error('Alerts count error:', error);
+            }
+        }
+
+        async function loadAlerts() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/alerts`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        showToast('Session expired', 'error');
+                        setTimeout(logout, 2000);
+                    }
+                    return;
+                }
+
+                const data = await response.json();
+                
+                const container = document.getElementById('alertsList');
+                if (!data.alerts || data.alerts.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #94a3b8;">No alerts</p>';
+                    return;
+                }
+
+                container.innerHTML = data.alerts.map(alert => `
+                    <div class="alert-item ${alert.level}">
+                        <div class="alert-header">
+                            <div class="alert-title">
+                                <span class="badge badge-${alert.level.toLowerCase()}">${alert.level}</span>
+                                ${alert.title || 'System Alert'}
+                            </div>
+                            <div class="alert-actions">
+                                <button class="btn btn-secondary btn-small" onclick="markAlertRead('${alert.id}')">✓ Read</button>
+                                <button class="btn btn-danger btn-small" onclick="dismissAlert('${alert.id}')">✕ Dismiss</button>
+                            </div>
+                        </div>
+                        <div class="alert-body">${alert.message}</div>
+                        <div class="alert-footer">
+                            <span>${alert.chainId || 'System'}</span>
+                            <span>${new Date(alert.timestamp).toLocaleString()}</span>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Alerts load error:', error);
+            }
+        }
+
+        async function markAlertRead(alertId) {
+            if (!authToken) return;
+
+            try {
+                await fetch(`${API_BASE_URL}/api/alerts/${alertId}/read`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                loadAlerts();
+                loadDashboard();
+            } catch (error) {
+                console.error('Mark read error:', error);
+            }
+        }
+
+        async function dismissAlert(alertId) {
+            if (!authToken) return;
+
+            try {
+                await fetch(`${API_BASE_URL}/api/alerts/${alertId}/dismiss`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                loadAlerts();
+                loadDashboard();
+                showToast('Alert dismissed', 'success');
+            } catch (error) {
+                console.error('Dismiss error:', error);
+            }
+        }
+
+        async function loadSystemHealth() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/detailed`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load');
+
+                const data = await response.json();
+                const container = document.getElementById('systemHealthContent');
+
+                container.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" style="color: ${data.status === 'ok' ? '#10b981' : '#ef4444'};">
+                            ${data.status.toUpperCase()}
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime</span>
+                        <span class="metric-value">${data.stats.uptimeHours}h</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Memory Usage</span>
+                        <span class="metric-value">${data.memory.heapUsed} / ${data.memory.heapTotal} (${data.memory.heapUsagePercent})</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">RSS Memory</span>
+                        <span class="metric-value">${data.memory.rss}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Platform</span>
+                        <span class="metric-value">${data.system.platform} ${data.system.arch}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Node Version</span>
+                        <span class="metric-value">${data.system.nodeVersion}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU Cores</span>
+                        <span class="metric-value">${data.system.cpus}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Load Average</span>
+                        <span class="metric-value">${data.system.loadAverage.join(', ')}</span>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('System health error:', error);
+            }
+        }
+
+        async function loadChainStatus() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/adapters`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load');
+
+                const data = await response.json();
+                const container = document.getElementById('chainsContent');
+
+                container.innerHTML = `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                            <div style="flex: 1; text-align: center; padding: 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 0.5rem;">
+                                <div style="font-size: 2rem; font-weight: 700; color: #10b981;">${data.healthy}</div>
+                                <div style="font-size: 0.875rem; color: #94a3b8;">Healthy</div>
+                            </div>
+                            <div style="flex: 1; text-align: center; padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 0.5rem;">
+                                <div style="font-size: 2rem; font-weight: 700; color: #ef4444;">${data.unhealthy}</div>
+                                <div style="font-size: 0.875rem; color: #94a3b8;">Unhealthy</div>
+                            </div>
+                        </div>
+                    </div>
+                    ${data.chains.map(chain => `
+                        <div class="chain-item ${chain.healthy ? 'healthy' : 'unhealthy'}">
+                            <div class="chain-info">
+                                <div class="chain-name">${chain.name.toUpperCase()}</div>
+                                <div class="chain-meta">
+                                    Status: ${chain.status} • 
+                                    Last Check: ${new Date(chain.lastCheck).toLocaleTimeString()} •
+                                    Reconnects: ${chain.reconnectAttempts}
+                                </div>
+                            </div>
+                            <span class="badge badge-${chain.healthy ? 'success' : 'critical'}">
+                                ${chain.healthy ? '✓ Connected' : '✕ Disconnected'}
+                            </span>
+                        </div>
+                    `).join('')}
+                `;
+
+            } catch (error) {
+                console.error('Chain status error:', error);
+            }
+        }
+
+        async function loadMemoryStats() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/memory`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load');
+
+                const data = await response.json();
+                const container = document.getElementById('memoryContent');
+
+                const heapPercent = parseFloat(data.heapUsagePercent);
+                const heapColor = heapPercent > 80 ? '#ef4444' : heapPercent > 60 ? '#f59e0b' : '#10b981';
+
+                container.innerHTML = `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.5rem;">
+                            Heap Usage: ${data.heapUsagePercent}
+                        </div>
+                        <div style="width: 100%; height: 20px; background: #0f172a; border-radius: 10px; overflow: hidden;">
+                            <div style="width: ${data.heapUsagePercent}; height: 100%; background: ${heapColor}; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" style="color: ${data.healthy ? '#10b981' : '#ef4444'};">
+                            ${data.status.toUpperCase()}
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Heap Used</span>
+                        <span class="metric-value">${data.heapUsed}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Heap Total</span>
+                        <span class="metric-value">${data.heapTotal}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">RSS</span>
+                        <span class="metric-value">${data.rss}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">External</span>
+                        <span class="metric-value">${data.external}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Array Buffers</span>
+                        <span class="metric-value">${data.arrayBuffers}</span>
+                    </div>
+                    ${data.alert ? `
+                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 0.5rem;">
+                            ⚠️ ${data.alert}
+                        </div>
+                    ` : ''}
+                `;
+
+            } catch (error) {
+                console.error('Memory stats error:', error);
+            }
+        }
+
+        async function loadQueueStats() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/queue`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load');
+
+                const data = await response.json();
+                const container = document.getElementById('queueContent');
+
+                container.innerHTML = `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.5rem;">
+                            Queue Utilization: ${data.health.utilization}
+                        </div>
+                        <div style="width: 100%; height: 20px; background: #0f172a; border-radius: 10px; overflow: hidden;">
+                            <div style="width: ${data.health.utilization}; height: 100%; background: #E6007A; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" style="color: ${data.status === 'healthy' ? '#10b981' : '#ef4444'};">
+                            ${data.status.toUpperCase()}
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Current Size</span>
+                        <span class="metric-value">${data.size}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Processed</span>
+                        <span class="metric-value">${data.processed}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Dropped</span>
+                        <span class="metric-value" style="color: ${data.dropped > 0 ? '#ef4444' : 'inherit'};">${data.dropped}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Deduplicated</span>
+                        <span class="metric-value">${data.deduplicated}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Peak Size</span>
+                        <span class="metric-value">${data.peakSize}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Processing Time</span>
+                        <span class="metric-value">${data.averageProcessingTimeMs}ms</span>
+                    </div>
+                    ${data.warnings && data.warnings.length > 0 ? `
+                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 0.5rem;">
+                            ${data.warnings.map(w => `⚠️ ${w}`).join('<br>')}
+                        </div>
+                    ` : ''}
+                `;
+
+            } catch (error) {
+                console.error('Queue stats error:', error);
+            }
+        }
+
+        async function triggerGC() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/health/gc`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showToast(`GC completed: freed ${data.freedMemory}`, 'success');
+                    loadMemoryStats();
+                } else {
+                    showToast(data.error || 'GC failed', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to trigger GC', 'error');
+            }
+        }
+
+        function refreshAllData() {
+            loadDashboard();
+            showToast('Refreshing all data...', 'success');
+        }
+
+        function filterAlerts(type) {
+            loadAlerts();
+        }
+
+        function applyAlertFilters() {
+            loadAlerts();
+        }
+
+        function initCharts() {
+            const ctx = document.getElementById('performanceChart');
+            if (!ctx) return;
+
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 10}, (_, i) => `${i}m`),
+                    datasets: [{
+                        label: 'Memory Usage',
+                        data: Array.from({length: 10}, () => Math.random() * 100),
+                        borderColor: '#E6007A',
+                        backgroundColor: 'rgba(230, 0, 122, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' }
+                        },
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
