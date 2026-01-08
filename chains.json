@@ -126,5 +126,37 @@
     ],
     "tokenSymbol": "BTC",
     "adapterType": "bitcoin"
+  },
+  {
+    "name": "cardano",
+    "endpoints": [
+      "https://go.getblock.io"
+    ],
+    "tokenSymbol": "ADA",
+    "adapterType": "utxo"
+  },
+  {
+    "name": "apex-fusion-prime",
+    "endpoints": [
+      ""
+    ],
+    "tokenSymbol": "AP3X",
+    "adapterType": "utxo"
+  },
+  {
+    "name": "apex-fusion-vector",
+    "endpoints": [
+      ""
+    ],
+    "tokenSymbol": "AP3X",
+    "adapterType": "utxo"
+  },
+  {
+    "name": "apex-fusion-nexus",
+    "endpoints": [
+      ""
+    ],
+    "tokenSymbol": "AP3X",
+    "adapterType": "evm"
   }
 ]

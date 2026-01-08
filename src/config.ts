@@ -202,15 +202,23 @@ CHAINS.forEach(chain => {
 // ——————————————————————————————————————
 const config = {
   port: int(process.env.PORT, 3000),
+
   jwtSecret: str(process.env.JWT_SECRET, 'dev-secret-change-me'),
   adminJwtSecret: str(process.env.ADMIN_JWT_SECRET, 'admin-dev-secret-change-me'),
   encryptionKey: Buffer.from(
     str(process.env.ENCRYPTION_KEY, 'default-32-char-key-change-me!'),
     'utf8'
   ).toString('base64'),
+
   adminIpWhitelist: str(process.env.ADMIN_IP_WHITELIST, '').split(',').map(s => s.trim()).filter(Boolean),
+  
   mongoDbUrl: str(process.env.MONGODB_URI, ''),
   mongoDbName: str(process.env.MONGODB_DB_NAME, 'nani_database'),
+
+  rateLimit: {
+    windowMs: 60 * 1000,
+    max: 10,
+  },
   // ——————————————————————————————————————
   // EVENT QUEUE CONFIGURATION (NEW)
   // ——————————————————————————————————————
@@ -238,7 +246,19 @@ const config = {
   },
   
   hfToken: str(process.env.HF_TOKEN, ''),
+  blockfrostConfig: {
+    customBackend: process.env.BLOCKFROST_CUSTOM_BACKEND || '',
+    network: "mainnet", // Vector uses mainnet network ID
+    gotOptions: {
+      headers: {
+        "dmtr-api-key": process.env.BLOCKFROST_API_KEY || '',
+      },
+    },
+  },
   
+  // ——————————————————————————————————————
+  // NOTIFICATION SERVICES CONFIGURATION
+  // ——————————————————————————————————————
   twilio: {
     sid: str(process.env.TWILIO_SID, ''),
     token: str(process.env.TWILIO_TOKEN, ''),
@@ -247,11 +267,6 @@ const config = {
   
   discord: {
     webhook: str(process.env.DISCORD_WEBHOOK, ''),
-  },
-  
-  rateLimit: {
-    windowMs: 60 * 1000,
-    max: 10,
   },
   
   smtp: {

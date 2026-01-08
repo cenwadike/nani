@@ -39,6 +39,7 @@ export class EVMAdapter implements ChainAdapter {
     'base',
     'moonbeam',
     'moonriver',
+    'apex-fusion-nexus',
   ];
 
   private provider?: ethers.WebSocketProvider;

@@ -22,7 +22,7 @@ export interface ChainEvent {
 
 export interface ChainMetadata {
   name: string;
-  type: 'substrate' | 'evm' | 'cosmos' | 'solana' | 'custom';
+  type: 'substrate' | 'evm' | 'cosmos' | 'solana' | 'utxo' | 'custom';
   tokenSymbol: string;
   decimals: number;
   ss58Format?: number;
@@ -59,7 +59,7 @@ export interface ChainAdapter {
   displayName: string;
 
   /** Chain type this adapter supports */
-  chainType: 'bitcoin' | 'substrate' | 'evm' | 'cosmos' | 'solana' | 'custom';
+  chainType: 'bitcoin' | 'substrate' | 'evm' | 'cosmos' | 'solana' | 'custom' | 'utxo';
 
   /** Supported chain identifiers (e.g., ['polkadot', 'kusama']) */
   supportedChains: string[];
